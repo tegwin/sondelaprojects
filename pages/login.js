@@ -13,22 +13,35 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    let res;
     try {
-      const res = await fetch('/api/auth/login', {
+      res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
-      if (res.ok) {
-        router.replace(decodeURIComponent(router.query.next || '/'));
-      } else {
-        const d = await res.json();
-        setError(d.error || 'Login failed');
-      }
-    } catch {
-      setError('Something went wrong. Please try again.');
+    } catch (networkErr) {
+      setError('Network error — could not reach server.');
+      setLoading(false);
+      return;
     }
-    setLoading(false);
+
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      setError(`Server returned status ${res.status} — check Vercel logs.`);
+      setLoading(false);
+      return;
+    }
+
+    if (res.ok && data.ok) {
+      router.replace(decodeURIComponent(router.query.next || '/'));
+    } else {
+      setError(data.error || `Login failed (${res.status})`);
+      setLoading(false);
+    }
   }
 
   return (
@@ -41,13 +54,24 @@ export default function Login() {
           <p style={s.sub}>Admin access only</p>
           <form onSubmit={handleSubmit} style={s.form}>
             <label style={s.label}>Username</label>
-            <input style={s.input} type="text" value={username}
+            <input
+              style={s.input}
+              type="text"
+              value={username}
               onChange={e => setUsername(e.target.value)}
-              autoComplete="username" required autoFocus />
+              autoComplete="username"
+              required
+              autoFocus
+            />
             <label style={s.label}>Password</label>
-            <input style={s.input} type="password" value={password}
+            <input
+              style={s.input}
+              type="password"
+              value={password}
               onChange={e => setPassword(e.target.value)}
-              autoComplete="current-password" required />
+              autoComplete="current-password"
+              required
+            />
             {error && <p style={s.error}>⚠️ {error}</p>}
             <button style={s.btn} type="submit" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In →'}
@@ -68,6 +92,6 @@ const s = {
   form: { display:'flex', flexDirection:'column', gap:'12px', textAlign:'left' },
   label: { fontSize:'0.82em', color:'#a6adc8' },
   input: { width:'100%', background:'#1e1e2e', border:'1px solid #45475a', borderRadius:'8px', padding:'11px 14px', color:'#cdd6f4', fontSize:'0.95em', boxSizing:'border-box' },
-  error: { color:'#f38ba8', fontSize:'0.82em', margin:'0' },
+  error: { color:'#f38ba8', fontSize:'0.82em', margin:0, padding:'10px 12px', background:'#2a1520', border:'1px solid #f38ba8', borderRadius:'6px' },
   btn: { background:'#89b4fa', color:'#1e1e2e', border:'none', borderRadius:'8px', padding:'12px', fontSize:'0.95em', fontWeight:'700', cursor:'pointer', marginTop:'4px' },
 };
