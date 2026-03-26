@@ -12,17 +12,18 @@ function secret() {
 export async function middleware(req) {
   const { pathname } = req.nextUrl;
 
-  // These routes are always public - no login needed
+  // Always public — no auth check
   if (
     pathname.startsWith('/project/') ||
     pathname.startsWith('/login') ||
+    pathname.startsWith('/api/auth/') ||
     pathname.startsWith('/api/project/') ||
     pathname.startsWith('/_next/')
   ) {
     return NextResponse.next();
   }
 
-  // All other routes require a valid session cookie
+  // Protected — check session cookie
   const token = req.cookies.get(COOKIE)?.value;
   if (token) {
     try {
