@@ -20,6 +20,27 @@ function statusLabel(id) {
   return 'Pending';
 }
 
+async function getPublicActions(ticketId) {
+  try {
+    const data = await haloFetch(`/api/Actions?ticket_id=${ticketId}&pagesize=50`);
+    const actions = data.actions || [];
+    // Only return actions visible to end users (isforpublicportal or showforusers)
+    return actions
+      .filter(a => a.isforpublicportal || a.showforusers || a.who_type === 2)
+      .map(a => ({
+        id: a.id,
+        date: a.date ? a.date.substring(0, 10) : null,
+        who: a.who || 'Unknown',
+        note: a.note_html || a.note || '',
+        timetaken: a.timetaken || 0,
+        outcome: a.outcome || '',
+      }))
+      .filter(a => a.note && a.note.trim());
+  } catch {
+    return [];
+  }
+}
+
 export default async function handler(req, res) {
   const { id } = req.query;
 
@@ -30,22 +51,27 @@ export default async function handler(req, res) {
     ]);
 
     const allTickets = ticketsData.tickets || [];
-    // Only child tasks of this project, not the project ticket itself
     const tasks = allTickets.filter(
       t => t.id != project.id && (t.parent_id == project.id || t.main_project_id == project.id)
     );
     const taskMap = {};
     tasks.forEach(t => (taskMap[t.id] = t));
 
+    // Fetch public actions for all tasks in parallel
+    const actionsMap = {};
+    await Promise.all(
+      tasks.map(async t => {
+        actionsMap[t.id] = await getPublicActions(t.id);
+      })
+    );
+
     const milestones = project.milestones || [];
     let rolling = fmtDate(project.dateoccurred) || new Date().toISOString().substring(0, 10);
     const lines = ['gantt', '    dateFormat YYYY-MM-DD', '    axisFormat %d %b', ''];
 
-    // Always show all tasks grouped by milestone
     milestones.forEach(ms => {
       const section = ms.name.replace(/[#:;{}\[\]]/g, '').trim();
       lines.push(`    section ${section}`);
-
       ms.tickets_list.forEach(ref => {
         const t = taskMap[ref.id];
         if (!t) return;
@@ -60,12 +86,10 @@ export default async function handler(req, res) {
         lines.push(`    ${name.padEnd(50)} :${flag}t${t.id}, ${start}, ${dur}`);
         rolling = addDays(start, parseInt(dur));
       });
-
-      // Any tasks not in a milestone
       lines.push('');
     });
 
-    // Tasks not in any milestone
+    // Orphan tasks
     const inMilestone = new Set(milestones.flatMap(ms => ms.tickets_list.map(r => r.id)));
     const orphans = tasks.filter(t => !inMilestone.has(t.id));
     if (orphans.length > 0) {
@@ -75,8 +99,7 @@ export default async function handler(req, res) {
         const name = raw.length > 48 ? raw.substring(0, 45) + '...' : raw;
         const flag = CLOSED.includes(t.status_id) ? 'done, ' : ACTIVE.includes(t.status_id) ? 'active, ' : '';
         const start = fmtDate(t.startdate) || rolling;
-        const dur   = '3d';
-        lines.push(`    ${name.padEnd(50)} :${flag}t${t.id}, ${start}, ${dur}`);
+        lines.push(`    ${name.padEnd(50)} :${flag}t${t.id}, ${start}, 3d`);
         rolling = addDays(start, 3);
       });
       lines.push('');
@@ -86,7 +109,6 @@ export default async function handler(req, res) {
     const active = tasks.filter(t => ACTIVE.includes(t.status_id)).length;
     const budget = project.budgets?.[0] || null;
 
-    // Full task details for the hover/click panel
     const taskDetails = tasks.map(t => ({
       id: t.id,
       summary: t.summary,
@@ -96,8 +118,9 @@ export default async function handler(req, res) {
       startdate: fmtDate(t.startdate),
       targetdate: fmtDate(t.targetdate),
       hoursLogged: t.projecttimeactual || 0,
-      details: t.details || '',
+      details: t.details_html || t.details || '',
       milestone: milestones.find(ms => ms.tickets_list.some(r => r.id === t.id))?.name || 'Other',
+      actions: actionsMap[t.id] || [],
     }));
 
     res.status(200).json({
