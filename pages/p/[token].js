@@ -22,8 +22,14 @@ export default function ProjectPage() {
   const [error, setError]     = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastFetch, setLastFetch] = useState(null);
-  const [view, setView]       = useState('gantt');   // 'gantt' | 'schedule' | 'kanban'
-  const [selected, setSelected] = useState(null);
+  const [view, setView]         = useState('gantt');   // 'gantt' | 'schedule' | 'kanban'
+  const [selected, setSelected]   = useState(null);
+  const [hideCompleted, setHideCompleted] = useState(false);
+  const [collapsed, setCollapsed] = useState({});
+
+  function toggleCollapse(name) {
+    setCollapsed(p => ({...p, [name]: !p[name]}));
+  }
   const ganttRef     = useRef(null);
   const mermaidReady = useRef(false);
 
@@ -180,7 +186,8 @@ export default function ProjectPage() {
               })}
             </div>
 
-            {/* View switcher */}
+            {/* View switcher + controls */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px',flexWrap:'wrap',gap:'10px'}}>
             <div style={s.viewSwitcher}>
               {['gantt','schedule','kanban'].map(v=>(
                 <button key={v} onClick={()=>setView(v)}
@@ -229,12 +236,12 @@ export default function ProjectPage() {
 
             {/* ── SCHEDULE VIEW ── */}
             {view === 'schedule' && (
-              <ScheduleView data={data} selected={selected} setSelected={setSelected} colour={colour}/>
+              <ScheduleView data={data} selected={selected} setSelected={setSelected} colour={colour} hideCompleted={hideCompleted} collapsed={collapsed} toggleCollapse={toggleCollapse}/>
             )}
 
             {/* ── KANBAN VIEW ── */}
             {view === 'kanban' && (
-              <KanbanView data={data} selected={selected} setSelected={setSelected} colour={colour}/>
+              <KanbanView data={data} selected={selected} setSelected={setSelected} colour={colour} hideCompleted={hideCompleted}/>
             )}
 
             {/* ── DETAIL PANEL (shared across views) ── */}
@@ -297,15 +304,16 @@ export default function ProjectPage() {
 }
 
 // ── SCHEDULE VIEW COMPONENT ──────────────────────────────────────────────────
-function ScheduleView({ data, selected, setSelected, colour }) {
+function ScheduleView({ data, selected, setSelected, colour, hideCompleted, collapsed, toggleCollapse }) {
+  const CLOSED = [9, 16, 21];
   const tasksByMilestone = {};
   data.milestones.forEach(ms => {
-    tasksByMilestone[ms.name] = {
-      milestone: ms,
-      tasks: data.taskDetails.filter(t => t.milestone === ms.name),
-    };
+    let tasks = data.taskDetails.filter(t => t.milestone === ms.name);
+    if (hideCompleted) tasks = tasks.filter(t => !CLOSED.includes(t.status_id));
+    tasksByMilestone[ms.name] = { milestone: ms, tasks };
   });
-  const other = data.taskDetails.filter(t => t.milestone === 'Other');
+  let other = data.taskDetails.filter(t => t.milestone === 'Other');
+  if (hideCompleted) other = other.filter(t => !CLOSED.includes(t.status_id));
 
   const totalH = data.stats.budgetHours || 0;
 
@@ -323,20 +331,32 @@ function ScheduleView({ data, selected, setSelected, colour }) {
       </div>
 
       {Object.values(tasksByMilestone).map(({ milestone: ms, tasks }) => {
-        if (tasks.length === 0) return null;
+        const isCollapsed = collapsed[ms.name];
+        const msCol = ms.state===2?'#a6e3a1':ms.state===1?colour:'#f9e2af';
         const msHours = tasks.reduce((a, t) => a + t.hoursLogged, 0);
-        const msCol   = ms.state===2?'#a6e3a1':ms.state===1?colour:'#f9e2af';
+        const completedCount = tasks.filter(t => [9,16,21].includes(t.status_id)).length;
+        if (tasks.length === 0 && hideCompleted) return null;
+
         return (
           <div key={ms.name}>
-            {/* Milestone header row */}
-            <div style={{...sv.msRow, borderLeftColor: msCol}}>
-              <div style={{...sv.msLabel, color: msCol}}>▼ {ms.name}</div>
-              <div style={sv.msMeta}>
-                {tasks.length} tasks · {msHours.toFixed(1)}h logged
+            {/* Milestone header — clickable to collapse */}
+            <div
+              onClick={() => toggleCollapse(ms.name)}
+              style={{...sv.msRow, borderLeftColor: msCol, cursor:'pointer', userSelect:'none'}}
+            >
+              <div style={{display:'flex',alignItems:'center',gap:'8px',flex:1}}>
+                <span style={{color:msCol,fontSize:'0.8em',transition:'transform 0.2s',display:'inline-block',transform:isCollapsed?'rotate(-90deg)':'rotate(0deg)'}}>▼</span>
+                <span style={{...sv.msLabel, color: msCol}}>{ms.name}</span>
+                <span style={{fontSize:'0.72em',color:'#6c7086'}}>
+                  {tasks.length} task{tasks.length!==1?'s':''} · {msHours.toFixed(1)}h logged
+                  {completedCount > 0 && !hideCompleted && ` · ${completedCount} completed`}
+                </span>
               </div>
+              <span style={{fontSize:'0.72em',color:'#45475a'}}>{isCollapsed ? 'Click to expand' : 'Click to collapse'}</span>
             </div>
-            {/* Task rows */}
-            {tasks.map((t, i) => {
+
+            {/* Task rows — hidden when collapsed */}
+            {!isCollapsed && tasks.map((t, i) => {
               const pct = totalH > 0 ? Math.min(100, Math.round((t.hoursLogged / totalH) * 100)) : 0;
               return (
                 <div key={t.id}
@@ -345,12 +365,13 @@ function ScheduleView({ data, selected, setSelected, colour }) {
                     ...sv.taskRow,
                     background: selected?.id===t.id ? '#1e2535' : i%2===0 ? '#252535' : '#1e1e2e',
                     borderLeft: selected?.id===t.id ? `3px solid ${colour}` : '3px solid transparent',
+                    opacity: [9,16,21].includes(t.status_id) ? 0.7 : 1,
                   }}>
                   <div style={{width:'140px',flexShrink:0}}>
                     <span style={{...sv.pill,...statusStyle(t.status_id)}}>{statusLabel(t.status_id)}</span>
                   </div>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={sv.taskName}>{t.summary}</div>
+                    <div style={{...sv.taskName, textDecoration:[9,16,21].includes(t.status_id)?'line-through':'none'}}>{t.summary}</div>
                     {t.actions.length>0&&<span style={{fontSize:'0.68em',color:colour}}>💬 {t.actions.length} note{t.actions.length>1?'s':''}</span>}
                   </div>
                   <div style={{width:'100px',flexShrink:0,fontSize:'0.78em',color:'#a6adc8'}}>{t.startdate||'—'}</div>
@@ -374,16 +395,24 @@ function ScheduleView({ data, selected, setSelected, colour }) {
 
       {other.length > 0 && (
         <div>
-          <div style={{...sv.msRow, borderLeftColor:'#45475a'}}>
-            <div style={{...sv.msLabel, color:'#6c7086'}}>▼ Other Tasks</div>
+          <div
+            onClick={() => toggleCollapse('__other__')}
+            style={{...sv.msRow, borderLeftColor:'#45475a', cursor:'pointer', userSelect:'none'}}
+          >
+            <div style={{display:'flex',alignItems:'center',gap:'8px',flex:1}}>
+              <span style={{color:'#6c7086',fontSize:'0.8em',display:'inline-block',transform:collapsed['__other__']?'rotate(-90deg)':'rotate(0deg)'}}>▼</span>
+              <span style={{...sv.msLabel, color:'#6c7086'}}>Other Tasks</span>
+              <span style={{fontSize:'0.72em',color:'#6c7086'}}>{other.length} task{other.length!==1?'s':''}</span>
+            </div>
           </div>
-          {other.map((t, i) => (
+          {!collapsed['__other__'] && other.map((t, i) => (
             <div key={t.id}
               onClick={() => setSelected(p => p?.id===t.id?null:t)}
               style={{
                 ...sv.taskRow,
                 background: selected?.id===t.id ? '#1e2535' : i%2===0 ? '#252535' : '#1e1e2e',
                 borderLeft: selected?.id===t.id ? `3px solid ${colour}` : '3px solid transparent',
+                opacity: [9,16,21].includes(t.status_id) ? 0.7 : 1,
               }}>
               <div style={{width:'140px',flexShrink:0}}>
                 <span style={{...sv.pill,...statusStyle(t.status_id)}}>{statusLabel(t.status_id)}</span>
@@ -405,17 +434,22 @@ function ScheduleView({ data, selected, setSelected, colour }) {
 }
 
 // ── KANBAN VIEW COMPONENT ────────────────────────────────────────────────────
-function KanbanView({ data, selected, setSelected, colour }) {
+function KanbanView({ data, selected, setSelected, colour, hideCompleted }) {
+  const CLOSED_IDS = [9, 16, 21];
+  const ACTIVE_IDS = [2, 22];
+
   const columns = [
-    { label: '📋 New',         filter: t => !CLOSED.includes(t.status_id) && !ACTIVE.includes(t.status_id), colour: '#f9e2af', bg: '#2e2e1e' },
-    { label: '🔄 In Progress', filter: t => ACTIVE.includes(t.status_id),                                   colour: '#89b4fa', bg: '#1e2e4a' },
-    { label: '✅ Completed',   filter: t => CLOSED.includes(t.status_id),                                   colour: '#a6e3a1', bg: '#1e3a2e' },
+    { label: '📋 New',         filter: t => !CLOSED_IDS.includes(t.status_id) && !ACTIVE_IDS.includes(t.status_id), colour: '#f9e2af' },
+    { label: '🔄 In Progress', filter: t => ACTIVE_IDS.includes(t.status_id),                                        colour: '#89b4fa' },
+    { label: '✅ Completed',   filter: t => CLOSED_IDS.includes(t.status_id),                                        colour: '#a6e3a1' },
   ];
 
   return (
     <div style={kv.board}>
       {columns.map(col => {
-        const tasks = data.taskDetails.filter(col.filter);
+        let tasks = data.taskDetails.filter(col.filter);
+        const isCompletedCol = col.label.includes('Completed');
+        if (hideCompleted && isCompletedCol) return null;
         return (
           <div key={col.label} style={kv.column}>
             <div style={{...kv.colHeader, color: col.colour, borderBottomColor: col.colour}}>
@@ -423,9 +457,7 @@ function KanbanView({ data, selected, setSelected, colour }) {
               <span style={kv.badge}>{tasks.length}</span>
             </div>
             <div style={kv.cards}>
-              {tasks.length === 0 && (
-                <div style={kv.empty}>No tasks</div>
-              )}
+              {tasks.length === 0 && <div style={kv.empty}>No tasks</div>}
               {tasks.map(t => (
                 <div key={t.id}
                   onClick={() => setSelected(p => p?.id===t.id?null:t)}
