@@ -151,6 +151,19 @@ export default async function handler(req, res) {
       actions:    actionsMap[t.id] || [],
     }));
 
+    // Calculate milestone state from actual task statuses (don't trust ms.state - can be stale)
+    const CLOSED_IDS = [9, 16, 21];
+    const ACTIVE_IDS = [2, 22];
+
+    function calcMilestoneState(ms) {
+      const msTasks = ms.tickets_list.map(r => taskMap[r.id]).filter(Boolean);
+      if (msTasks.length === 0) return 0;
+      if (msTasks.every(t => CLOSED_IDS.includes(t.status_id))) return 2; // all closed = Complete
+      if (msTasks.some(t => ACTIVE_IDS.includes(t.status_id)))  return 1; // any active = Active
+      if (msTasks.some(t => CLOSED_IDS.includes(t.status_id)))  return 1; // some closed = Active/In Progress
+      return 0; // all pending = Pending
+    }
+
     res.status(200).json({
       project: {
         id:            project.id,
@@ -173,7 +186,7 @@ export default async function handler(req, res) {
       ganttCode:  lines.join('\n'),
       milestones: milestones.map(ms => ({
         name:      ms.name,
-        state:     ms.state,
+        state:     calcMilestoneState(ms),   // calculated from actual tasks, not HaloPSA state
         taskCount: ms.tickets_list.length,
       })),
       taskDetails,

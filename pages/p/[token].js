@@ -170,22 +170,6 @@ export default function ProjectPage() {
               ))}
             </div>
 
-            {/* Milestones */}
-            <div style={s.milestones}>
-              {data.milestones.map((ms,i)=>{
-                const lbl=ms.state===2?'Complete':ms.state===1?'Active':'Pending';
-                const col=ms.state===2?'#a6e3a1':ms.state===1?colour:'#f9e2af';
-                const bg =ms.state===2?'#1e3a2e':ms.state===1?colour+'22':'#2e2e1e';
-                return(
-                  <div key={i} style={s.ms}>
-                    <span style={s.msN}>{ms.name}</span>
-                    <span style={s.msM}>{ms.taskCount} tasks</span>
-                    <span style={{...s.msS,color:col,background:bg}}>{lbl}</span>
-                  </div>
-                );
-              })}
-            </div>
-
             {/* View switcher + controls */}
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px',flexWrap:'wrap',gap:'10px'}}>
               <div style={s.viewSwitcher}>
