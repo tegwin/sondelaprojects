@@ -20,22 +20,42 @@ function statusLabel(id) {
   return 'Pending';
 }
 
-async function getPublicActions(ticketId) {
+// Extract agent name from ticket — HaloPSA returns different fields
+// depending on whether it's a list or full get response
+function agentName(t) {
+  return t.agent_name          // ticket list response
+      || t.takenby             // full project response
+      || t.agents_name         // some endpoints
+      || (t.agent_id && t.agent_id !== 1 ? `Agent #${t.agent_id}` : null)
+      || 'Unassigned';
+}
+
+async function getActions(ticketId) {
   try {
-    const data = await haloFetch(`/api/Actions?ticket_id=${ticketId}&pagesize=50`);
+    const data = await haloFetch(`/api/Actions?ticket_id=${ticketId}&pagesize=50&includebydefault=true`);
     const actions = data.actions || [];
-    // Only return actions visible to end users (isforpublicportal or showforusers)
     return actions
-      .filter(a => a.isforpublicportal || a.showforusers || a.who_type === 2)
+      .filter(a => {
+        // Exclude purely internal actions — show anything marked for end users
+        // or not explicitly marked as internal
+        const isInternal = a.isinternal || a.internal || a.who_type === 1;
+        const showToUser = a.showforusers || a.show_to_user || a.isforpublicportal || a.enduser_visible;
+        // Include if explicitly public OR not explicitly internal
+        return showToUser || !isInternal;
+      })
+      .filter(a => {
+        // Must have actual note content
+        const note = a.note_html || a.note || '';
+        return note.trim().length > 0;
+      })
       .map(a => ({
         id: a.id,
-        date: a.date ? a.date.substring(0, 10) : null,
-        who: a.who || 'Unknown',
+        date: a.date ? a.date.substring(0, 16).replace('T', ' ') : null,
+        who: a.who || a.agent_name || 'Unknown',
         note: a.note_html || a.note || '',
-        timetaken: a.timetaken || 0,
-        outcome: a.outcome || '',
-      }))
-      .filter(a => a.note && a.note.trim());
+        timetaken: a.timetaken || a.time_taken || 0,
+        outcome: a.outcome || a.outcome_name || '',
+      }));
   } catch {
     return [];
   }
@@ -57,13 +77,11 @@ export default async function handler(req, res) {
     const taskMap = {};
     tasks.forEach(t => (taskMap[t.id] = t));
 
-    // Fetch public actions for all tasks in parallel
+    // Fetch actions for all tasks in parallel
     const actionsMap = {};
-    await Promise.all(
-      tasks.map(async t => {
-        actionsMap[t.id] = await getPublicActions(t.id);
-      })
-    );
+    await Promise.all(tasks.map(async t => {
+      actionsMap[t.id] = await getActions(t.id);
+    }));
 
     const milestones = project.milestones || [];
     let rolling = fmtDate(project.dateoccurred) || new Date().toISOString().substring(0, 10);
@@ -89,7 +107,7 @@ export default async function handler(req, res) {
       lines.push('');
     });
 
-    // Orphan tasks
+    // Orphan tasks not in any milestone
     const inMilestone = new Set(milestones.flatMap(ms => ms.tickets_list.map(r => r.id)));
     const orphans = tasks.filter(t => !inMilestone.has(t.id));
     if (orphans.length > 0) {
@@ -114,7 +132,7 @@ export default async function handler(req, res) {
       summary: t.summary,
       status: statusLabel(t.status_id),
       status_id: t.status_id,
-      agent: t.agents_name || t.takenby || 'Unassigned',
+      agent: agentName(t),
       startdate: fmtDate(t.startdate),
       targetdate: fmtDate(t.targetdate),
       hoursLogged: t.projecttimeactual || 0,
@@ -128,7 +146,7 @@ export default async function handler(req, res) {
         id: project.id,
         summary: project.summary,
         client_name: project.client_name,
-        agent_name: project.takenby,
+        agent_name: project.takenby || agentName(project),
       },
       stats: {
         total: tasks.length,
