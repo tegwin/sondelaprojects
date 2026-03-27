@@ -128,17 +128,12 @@ export default function ProjectPage() {
 
         {data && (
           <main style={s.main}>
-            {/* Progress bar */}
-            <div style={{height:'4px',background:'#313244',margin:'-28px -28px 28px',overflow:'hidden'}}>
-              <div style={{height:'4px',background:colour,width:`${pct}%`,transition:'width 0.5s ease'}}/>
-            </div>
-
-            {/* Title row */}
+            {/* Title row */
             <div style={s.titleRow}>
               <div>
                 <span style={{...s.clientBadge,color:colour,borderColor:colour+'50'}}>{data.project.client_name}</span>
                 <h1 style={s.h1}>{data.project.summary}</h1>
-                <p style={s.meta}>Managed by {data.project.agent_name} · <strong style={{color:colour}}>{pct}%</strong> complete</p>
+                <p style={s.meta}>Managed by {data.project.agent_name}</p>
               </div>
               <div style={{display:'flex',gap:'8px',flexShrink:0,alignItems:'center'}}>
                 <button style={s.emailBtn} onClick={()=>{
@@ -168,6 +163,29 @@ export default function ProjectPage() {
                   <div style={s.statL}>{st.l}</div>
                 </div>
               ))}
+            </div>
+
+            {/* Progress bar */}
+            <div style={{marginBottom:'16px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px'}}>
+                <span style={{fontSize:'0.78em',color:'#a6adc8',fontWeight:600}}>Overall Progress</span>
+                <span style={{fontSize:'0.82em',fontWeight:700,color:'#a6e3a1'}}>{pct}% complete</span>
+              </div>
+              <div style={{height:'18px',background:'#1e1e2e',borderRadius:'9px',overflow:'hidden',border:'1px solid #313244'}}>
+                <div style={{
+                  height:'100%',
+                  width:`${pct}%`,
+                  background:'linear-gradient(90deg, #40a060, #a6e3a1)',
+                  borderRadius:'9px',
+                  transition:'width 0.6s ease',
+                  display:'flex',
+                  alignItems:'center',
+                  justifyContent:'flex-end',
+                  paddingRight: pct > 8 ? '8px' : '0',
+                }}>
+                  {pct > 8 && <span style={{fontSize:'0.7em',fontWeight:700,color:'#1e1e2e'}}>{pct}%</span>}
+                </div>
+              </div>
             </div>
 
             {/* View switcher + controls */}
