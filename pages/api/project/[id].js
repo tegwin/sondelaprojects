@@ -154,6 +154,8 @@ export default async function handler(req, res) {
         summary: project.summary,
         client_name: project.client_name,
         agent_name: project.takenby || (project.agent_id ? agentMap[project.agent_id] : '') || 'Sondela Consulting',
+        client_colour: project.client_colour || '#89b4fa',
+        client_id: project.client_id,
       },
       stats: {
         total: tasks.length,
@@ -163,6 +165,7 @@ export default async function handler(req, res) {
         hoursLogged: project.projecttimeactual || 0,
         budgetHours: budget?.hours || null,
         remainingHours: budget?.remaining_hours ?? null,
+        pctComplete: tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0,
       },
       ganttCode: lines.join('\n'),
       milestones: milestones.map(ms => ({

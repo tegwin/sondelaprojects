@@ -52,7 +52,9 @@ export default function ProjectPage() {
     setTimeout(render, 150);
   }, [data]);
 
-  const title = data ? `${data.project.client_name} — ${data.project.summary}` : 'Loading...';
+  const title  = data ? `${data.project.client_name} — ${data.project.summary}` : 'Loading...';
+  const colour = data?.project?.client_colour || '#89b4fa';
+  const pct    = data?.stats?.pctComplete || 0;
 
   return (
     <>
@@ -89,16 +91,29 @@ export default function ProjectPage() {
         {data && (
           <main style={s.main}>
 
+            {/* Progress bar at top */}
+            <div style={{height:'4px',background:'#313244',borderRadius:'0',margin:'-28px -28px 28px',overflow:'hidden'}}>
+              <div style={{height:'4px',background:colour,width:`${pct}%`,transition:'width 0.5s ease'}}/>
+            </div>
+
             {/* Title */}
             <div style={s.titleRow}>
               <div>
-                <span style={s.clientBadge}>{data.project.client_name}</span>
+                <span style={{...s.clientBadge, color:colour, borderColor:colour+'50'}}>{data.project.client_name}</span>
                 <h1 style={s.h1}>{data.project.summary}</h1>
-                <p style={s.meta}>Managed by {data.project.agent_name}</p>
+                <p style={s.meta}>Managed by {data.project.agent_name} · <strong style={{color:colour}}>{pct}%</strong> complete</p>
               </div>
-              <button style={s.refreshBtn} onClick={load} disabled={loading}>
-                {loading ? '...' : '⟳ Refresh'}
-              </button>
+              <div style={{display:'flex',gap:'8px',flexShrink:0}}>
+                <button style={s.emailBtn} onClick={()=>{
+                  const url  = window.location.href;
+                  const subj = encodeURIComponent(`Project Update: ${data.project.summary}`);
+                  const body = encodeURIComponent(`Hi,\n\nHere is a link to your live project status for "${data.project.summary}":\n\n${url}\n\nYou can see the timeline, tasks, and notes in real time — no login required.\n\nKind regards,\nSondela Consulting`);
+                  window.location.href = `mailto:?subject=${subj}&body=${body}`;
+                }}>📧 Share</button>
+                <button style={s.refreshBtn} onClick={load} disabled={loading}>
+                  {loading ? '...' : '⟳ Refresh'}
+                </button>
+              </div>
             </div>
 
             {/* Stats */}
@@ -277,6 +292,7 @@ const s = {
   clientBadge: {display:'inline-block',background:'#313244',color:'#89b4fa',border:'1px solid #45475a',borderRadius:'20px',fontSize:'0.78em',padding:'4px 14px',marginBottom:'8px'},
   h1:          {fontSize:'1.4em',color:'#cdd6f4',fontWeight:700,lineHeight:1.3,marginBottom:'4px'},
   meta:        {fontSize:'0.82em',color:'#6c7086',margin:0},
+  emailBtn:    {background:'#313244',color:'#cdd6f4',border:'1px solid #45475a',borderRadius:'8px',padding:'9px 14px',fontSize:'0.85em',cursor:'pointer',whiteSpace:'nowrap'},
   refreshBtn:  {background:'#313244',color:'#cdd6f4',border:'1px solid #45475a',borderRadius:'8px',padding:'9px 18px',fontSize:'0.85em',cursor:'pointer',whiteSpace:'nowrap',flexShrink:0},
   stats:       {display:'flex',gap:'10px',marginBottom:'16px',flexWrap:'wrap'},
   stat:        {background:'#313244',border:'1px solid #45475a',borderRadius:'10px',padding:'12px 16px',flex:1,minWidth:'90px'},
