@@ -109,7 +109,7 @@ export default function ClientPage() {
                     <span style={{...s.statusPill, ...statusStyle(p.status_id)}}>
                       {statusLabel(p.status_id)}
                     </span>
-                    <a href={`/project/${p.id}`} target="_blank" rel="noreferrer" style={s.viewBtn}>
+                    <a href={`/p/${p.token}`} target="_blank" rel="noreferrer" style={s.viewBtn}>
                       View →
                     </a>
                   </div>

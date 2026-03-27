@@ -1,4 +1,5 @@
 import { haloFetch } from '../../../lib/halo';
+import { signProject } from '../../../lib/token';
 
 export default async function handler(req, res) {
   const { id } = req.query;
@@ -17,6 +18,7 @@ export default async function handler(req, res) {
         const done  = Math.max(0, total - open);
         return {
           id:           p.id,
+          token:        signProject(p.id),
           summary:      p.summary,
           status_id:    p.status_id,
           agent_name:   p.takenby || '',

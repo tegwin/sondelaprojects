@@ -31,13 +31,14 @@ export default function Home() {
     return acc;
   }, {});
 
-  function getShareUrl(id) {
-    return typeof window !== 'undefined' ? `${window.location.origin}/project/${id}` : `/project/${id}`;
+  function getShareUrl(p) {
+    const base = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${base}/p/${p.token}`;
   }
 
-  function copyLink(id) {
-    navigator.clipboard.writeText(getShareUrl(id));
-    setCopied(id);
+  function copyLink(p) {
+    navigator.clipboard.writeText(getShareUrl(p));
+    setCopied(p.id);
     setTimeout(() => setCopied(null), 2000);
   }
 
@@ -46,7 +47,7 @@ export default function Home() {
   }
 
   function sendEmail(p, toEmail) {
-    const url  = getShareUrl(p.id);
+    const url  = getShareUrl(p);
     const subj = encodeURIComponent(`Project Update: ${p.summary}`);
     const body = encodeURIComponent(
       `Hi,\n\nHere is a link to view the live project status for "${p.summary}":\n\n${url}\n\nYou can see the timeline, task progress, and notes in real time — no login required.\n\nKind regards,\nSondela Consulting`
@@ -125,7 +126,7 @@ export default function Home() {
                   <span style={s.clientCount}>{group.projects.length} project{group.projects.length!==1?'s':''}</span>
                 </div>
                 <div style={s.grid}>
-                  {group.projects.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} shareUrl={getShareUrl(p.id)} statusColour={statusColour} statusLabel={statusLabel}/>)}
+                  {group.projects.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} shareUrl={getShareUrl(p)} statusColour={statusColour} statusLabel={statusLabel}/>)}
                 </div>
               </div>
             ))
@@ -134,7 +135,7 @@ export default function Home() {
           {/* Flat list */}
           {!loading && groupBy === 'all' && (
             <div style={s.grid}>
-              {filtered.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} shareUrl={getShareUrl(p.id)} statusColour={statusColour} statusLabel={statusLabel}/>)}
+              {filtered.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} shareUrl={getShareUrl(p)} statusColour={statusColour} statusLabel={statusLabel}/>)}
               {filtered.length === 0 && <p style={s.empty}>No projects match your search.</p>}
             </div>
           )}
@@ -150,6 +151,7 @@ export default function Home() {
 }
 
 function ProjectCard({ p, copied, onCopy, onEmail, shareUrl, statusColour, statusLabel }) {
+  const viewUrl = `/p/${p.token}`;
   return (
     <div className="proj-card" style={{...s.card, borderColor: p.client_colour + '40'}}>
       {/* Progress bar */}
@@ -174,7 +176,7 @@ function ProjectCard({ p, copied, onCopy, onEmail, shareUrl, statusColour, statu
       </div>
 
       <div style={s.cardActions}>
-        <a href={`/project/${p.id}`} target="_blank" rel="noreferrer" style={s.btnView}>
+        <a href={viewUrl} target="_blank" rel="noreferrer" style={s.btnView}>
           View Gantt →
         </a>
         <button style={s.btnIcon} onClick={()=>onCopy(p.id)} title="Copy link">
@@ -183,7 +185,7 @@ function ProjectCard({ p, copied, onCopy, onEmail, shareUrl, statusColour, statu
         <button style={s.btnIcon} onClick={()=>onEmail(p)} title="Share via email">
           📧
         </button>
-        <a href={`/client/${p.client_id}`} style={s.btnIcon} title="All client projects">
+        <a href={`/client/${p.client_id}`} style={s.btnIcon} title='All client projects for this client'>
           👤
         </a>
       </div>

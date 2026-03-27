@@ -1,4 +1,5 @@
 import { haloFetch } from '../../lib/halo';
+import { signProject } from '../../lib/token';
 
 export default async function handler(req, res) {
   try {
@@ -24,6 +25,7 @@ export default async function handler(req, res) {
         const client = clientMap[p.client_id] || {};
         return {
           id:            p.id,
+          token:         signProject(p.id),   // secure unguessable URL token
           summary:       p.summary,
           client_id:     p.client_id,
           client_name:   p.client_name,

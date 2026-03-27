@@ -12,10 +12,13 @@ function secret() {
 export async function middleware(req) {
   const { pathname } = req.nextUrl;
 
-  // Always public — no auth check
+  // Public routes — no auth needed (token-based project pages)
   if (
-    pathname.startsWith('/project/') ||
+    pathname.startsWith('/p/') ||          // public project pages (token URLs)
+    pathname.startsWith('/project/') ||    // keep old route working for now
+    pathname.startsWith('/client/') ||     // client overview pages
     pathname.startsWith('/login') ||
+    pathname.startsWith('/api/p/') ||      // public project API (token-verified internally)
     pathname.startsWith('/api/auth/') ||
     pathname.startsWith('/api/project/') ||
     pathname.startsWith('/_next/')
@@ -23,7 +26,7 @@ export async function middleware(req) {
     return NextResponse.next();
   }
 
-  // Protected — check session cookie
+  // Everything else needs admin session
   const token = req.cookies.get(COOKIE)?.value;
   if (token) {
     try {
