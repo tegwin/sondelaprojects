@@ -128,7 +128,7 @@ export default function ProjectPage() {
 
         {data && (
           <main style={s.main}>
-            {/* Title row */
+            {/* Title row */}
             <div style={s.titleRow}>
               <div>
                 <span style={{...s.clientBadge,color:colour,borderColor:colour+'50'}}>{data.project.client_name}</span>
