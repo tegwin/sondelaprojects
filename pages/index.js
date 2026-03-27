@@ -9,7 +9,10 @@ export default function Home() {
   const [copied, setCopied]         = useState(null);
   const [groupBy, setGroupBy]       = useState('client'); // 'client' | 'all'
   const [emailModal, setEmailModal] = useState(null);
-  const [linkMgr, setLinkMgr]     = useState(null); // { project, meta }
+  const [linkMgr, setLinkMgr]     = useState(null);
+  const [page, setPage]           = useState('projects');
+  const [linkData, setLinkData]   = useState([]);
+  const [linksLoading, setLinksLoading] = useState(false); // 'projects' | 'links'
 
   useEffect(() => {
     fetch('/api/projects')
@@ -57,6 +60,14 @@ export default function Home() {
     setEmailModal(null);
   }
 
+  async function fetchLinks() {
+    setLinksLoading(true);
+    const res = await fetch('/api/admin/links');
+    const d = await res.json();
+    setLinkData(d.links || []);
+    setLinksLoading(false);
+  }
+
   async function openLinkMgr(p) {
     const res  = await fetch(`/api/admin/link/${p.token}`);
     const meta = await res.json();
@@ -91,6 +102,14 @@ export default function Home() {
                 <div style={s.logoText}>Sondela Project Portal</div>
                 <div style={s.logoSub}>Powered by HaloPSA</div>
               </div>
+            </div>
+            <div style={{display:'flex',gap:'4px',background:'#313244',borderRadius:'8px',padding:'3px'}}>
+              <button onClick={()=>setPage('projects')} style={{background:page==='projects'?'#45475a':'transparent',border:'none',color:page==='projects'?'#cdd6f4':'#6c7086',padding:'6px 14px',borderRadius:'6px',cursor:'pointer',fontSize:'0.82em',fontWeight:page==='projects'?700:400}}>
+                📋 Projects
+              </button>
+              <button onClick={()=>{setPage('links');if(!linkData.length)fetchLinks();}} style={{background:page==='links'?'#45475a':'transparent',border:'none',color:page==='links'?'#cdd6f4':'#6c7086',padding:'6px 14px',borderRadius:'6px',cursor:'pointer',fontSize:'0.82em',fontWeight:page==='links'?700:400}}>
+                🔐 Link Manager
+              </button>
             </div>
             <a href="/api/auth/logout" style={s.signout}>Sign out</a>
           </div>
@@ -148,6 +167,53 @@ export default function Home() {
           )}
         </main>
       </div>
+
+      {/* Link Manager Page */}
+      {page === 'links' && (
+        <div style={{maxWidth:'1300px',margin:'0 auto',padding:'28px'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'20px'}}>
+            <h2 style={{color:'#cdd6f4',margin:0,fontSize:'1.1em'}}>🔐 Link Manager</h2>
+            <button onClick={fetchLinks} style={{background:'#313244',border:'1px solid #45475a',color:'#cdd6f4',borderRadius:'6px',padding:'7px 14px',fontSize:'0.82em',cursor:'pointer'}}>
+              {linksLoading?'Loading...':'⟳ Refresh'}
+            </button>
+          </div>
+          <div style={{background:'#313244',border:'1px solid #45475a',borderRadius:'12px',overflow:'hidden'}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 160px 80px 100px 120px 100px',gap:'0',background:'#181825',padding:'10px 16px',borderBottom:'1px solid #45475a',fontSize:'0.72em',color:'#6c7086',textTransform:'uppercase',letterSpacing:'0.05em'}}>
+              <div>Project</div><div>Status</div><div>Views</div><div>First Viewed</div><div>Expires</div><div>Actions</div>
+            </div>
+            {linksLoading&&<div style={{padding:'30px',textAlign:'center',color:'#6c7086'}}>Loading link data...</div>}
+            {!linksLoading&&linkData.map((l,i)=>(
+              <div key={l.id} style={{display:'grid',gridTemplateColumns:'1fr 160px 80px 100px 120px 100px',gap:'0',padding:'12px 16px',borderBottom:'1px solid #313244',background:i%2===0?'#252535':'#1e1e2e',alignItems:'center'}}>
+                <div>
+                  <div style={{fontSize:'0.85em',color:'#cdd6f4',fontWeight:500}}>{l.summary}</div>
+                  <div style={{fontSize:'0.72em',color:'#6c7086'}}>{l.client_name}</div>
+                </div>
+                <div>
+                  <span style={{
+                    fontSize:'0.75em',padding:'3px 10px',borderRadius:'10px',fontWeight:600,
+                    background:l.status==='active'?'#1e3a2e':l.status==='revoked'?'#2e1e1e':'#2e2e1e',
+                    color:l.status==='active'?'#a6e3a1':l.status==='revoked'?'#f38ba8':'#f9e2af',
+                  }}>
+                    {l.status==='active'?'✅ Active':l.status==='revoked'?'🔒 Revoked':'⏰ Expired'}
+                  </span>
+                </div>
+                <div style={{fontSize:'0.82em',color:l.views>0?'#89b4fa':'#45475a',fontWeight:l.views>0?700:400}}>
+                  {l.views>0?`${l.views} view${l.views>1?'s':''}`:'—'}
+                </div>
+                <div style={{fontSize:'0.75em',color:'#6c7086'}}>{l.firstView?l.firstView.substring(0,10):'—'}</div>
+                <div style={{fontSize:'0.75em',color:l.expired?'#f38ba8':'#6c7086'}}>{l.expiresAt?l.expiresAt.substring(0,10):'No expiry'}</div>
+                <div>
+                  <button onClick={()=>openLinkMgr({...l,token:l.token,client_colour:'#89b4fa'})}
+                    style={{background:'#45475a',border:'none',color:'#cdd6f4',borderRadius:'6px',padding:'5px 10px',fontSize:'0.75em',cursor:'pointer'}}>
+                    Manage
+                  </button>
+                </div>
+              </div>
+            ))}
+            {!linksLoading&&linkData.length===0&&<div style={{padding:'30px',textAlign:'center',color:'#6c7086'}}>No link data yet. Links are tracked once created.</div>}
+          </div>
+        </div>
+      )}
 
       {/* Email modal */}
       {emailModal && (

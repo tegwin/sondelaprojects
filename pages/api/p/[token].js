@@ -1,6 +1,7 @@
 import { haloFetch } from '../../../lib/halo';
-import { isLinkValid } from '../../../lib/redis';
 import { verifyProject } from '../../../lib/token';
+import { isLinkValid, recordView } from '../../../lib/redis';
+import { notifyFirstView } from '../../../lib/notify';
 
 const CLOSED = [9, 16, 21];
 const ACTIVE  = [2, 22];
@@ -49,16 +50,65 @@ async function getAgentMap() {
   } catch { return {}; }
 }
 
+function calcMilestoneState(ms, taskMap) {
+  const msTasks = ms.tickets_list.map(r => taskMap[r.id]).filter(Boolean);
+  if (msTasks.length === 0) return 0;
+  if (msTasks.every(t => CLOSED.includes(t.status_id))) return 2;
+  if (msTasks.some(t => ACTIVE.includes(t.status_id) || CLOSED.includes(t.status_id))) return 1;
+  return 0;
+}
+
+function calcRAG(tasks) {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  let overdue = 0, atRisk = 0;
+  for (const t of tasks) {
+    if (CLOSED.includes(t.status_id)) continue;
+    const target = fmtDate(t.targetdate);
+    if (!target) continue;
+    const diff = (new Date(target) - today) / 86400000;
+    if (diff < 0) overdue++;
+    else if (diff <= 7) atRisk++;
+  }
+  if (overdue > 0) return { status: 'red',   label: `${overdue} overdue task${overdue>1?'s':''}` };
+  if (atRisk  > 0) return { status: 'amber', label: `${atRisk} task${atRisk>1?'s':''} due within 7 days` };
+  return { status: 'green', label: 'On track' };
+}
+
+function calcBurnRate(tasks, hoursLogged, budgetHours) {
+  const done = tasks.filter(t => CLOSED.includes(t.status_id)).length;
+  const remaining = tasks.length - done;
+  if (done === 0 || hoursLogged === 0) return null;
+  const hrsPerTask = hoursLogged / done;
+  const projected  = hoursLogged + (hrsPerTask * remaining);
+  const onBudget   = budgetHours ? projected <= budgetHours : null;
+  return {
+    hrsPerTask:    Math.round(hrsPerTask * 10) / 10,
+    projectedTotal: Math.round(projected * 10) / 10,
+    budgetHours,
+    onBudget,
+    tasksRemaining: remaining,
+  };
+}
+
+function findNextSession(tasks) {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const upcoming = tasks
+    .filter(t => !CLOSED.includes(t.status_id))
+    .filter(t => fmtDate(t.startdate))
+    .sort((a, b) => new Date(a.startdate) - new Date(b.startdate));
+  if (!upcoming.length) return null;
+  const t = upcoming[0];
+  return { id: t.id, summary: t.summary, startdate: fmtDate(t.startdate) };
+}
+
 export default async function handler(req, res) {
   const { token } = req.query;
 
-  // Verify the token - reject if invalid/tampered
   const projectId = verifyProject(token);
-  if (!projectId) {
-    return res.status(404).json({ error: 'Project not found' });
-  }
+  if (!projectId) return res.status(404).json({ error: 'Project not found' });
 
-  // Check revocation and expiry
   const linkCheck = await isLinkValid(projectId);
   if (!linkCheck.valid) {
     return res.status(410).json({
@@ -69,99 +119,96 @@ export default async function handler(req, res) {
     });
   }
 
+  // Record view and notify on first view (non-blocking)
+  const viewPromise = recordView(projectId);
+
   try {
     const [project, agentMap] = await Promise.all([
       haloFetch(`/api/Projects/${projectId}`),
       getAgentMap(),
     ]);
 
-    // Use milestone ticket lists as the source of truth for tasks
-    // This avoids the Tickets API returning unrelated tickets
     const milestones = project.milestones || [];
     const allTicketIds = [...new Set(milestones.flatMap(ms => ms.tickets_list.map(r => r.id)))];
 
-    // Fetch each task individually (in parallel) — reliable, uses correct IDs
     const taskResults = await Promise.all(
-      allTicketIds.map(id =>
-        haloFetch(`/api/Tickets/${id}`).catch(() => null)
-      )
+      allTicketIds.map(id => haloFetch(`/api/Tickets/${id}`).catch(() => null))
     );
     const tasks = taskResults.filter(Boolean);
     const taskMap = {};
     tasks.forEach(t => (taskMap[t.id] = t));
 
-    // Fetch actions in parallel
     const actionsMap = {};
-    await Promise.all(tasks.map(async t => {
-      actionsMap[t.id] = await getActions(t.id);
-    }));
+    await Promise.all(tasks.map(async t => { actionsMap[t.id] = await getActions(t.id); }));
 
     function agentName(t) {
       if (t.agent_id && t.agent_id !== 1 && agentMap[t.agent_id]) return agentMap[t.agent_id];
       if (t.takenby?.trim()) return t.takenby.trim();
-      if (t.agent_name?.trim()) return t.agent_name.trim();
       return 'Unassigned';
     }
 
     // Build Gantt
     let rolling = fmtDate(project.dateoccurred) || new Date().toISOString().substring(0, 10);
     const lines = ['gantt', '    dateFormat YYYY-MM-DD', '    axisFormat %d %b', ''];
-
     milestones.forEach(ms => {
       const section = ms.name.replace(/[#:;{}\[\]]/g, '').trim();
       lines.push(`    section ${section}`);
-      let hasRows = false;
       ms.tickets_list.forEach(ref => {
         const t = taskMap[ref.id];
         if (!t) return;
-        hasRows = true;
         const raw  = t.summary.replace(/[#:;{}\[\]"']/g, '').trim();
         const name = raw.length > 48 ? raw.substring(0, 45) + '...' : raw;
         const flag = CLOSED.includes(t.status_id) ? 'done, ' : ACTIVE.includes(t.status_id) ? 'active, ' : '';
         const start = fmtDate(t.startdate) || rolling;
         const end   = fmtDate(t.targetdate);
         const dur   = (end && fmtDate(t.startdate))
-          ? Math.max(1, Math.ceil((new Date(end) - new Date(start)) / 86400000)) + 'd'
-          : '3d';
+          ? Math.max(1, Math.ceil((new Date(end) - new Date(start)) / 86400000)) + 'd' : '3d';
         lines.push(`    ${name.padEnd(50)} :${flag}t${t.id}, ${start}, ${dur}`);
         rolling = addDays(start, parseInt(dur));
       });
-      // If no tasks loaded for this milestone, add a placeholder so section shows
-      if (!hasRows && ms.tickets_list.length > 0) {
-        lines.push(`    ${ms.name.padEnd(50)} :milestone, ms${ms.id}, ${rolling}, 0d`);
-      }
       lines.push('');
     });
 
-    const done   = tasks.filter(t => CLOSED.includes(t.status_id)).length;
-    const active = tasks.filter(t => ACTIVE.includes(t.status_id)).length;
-    const budget = project.budgets?.[0] || null;
+    const done    = tasks.filter(t => CLOSED.includes(t.status_id)).length;
+    const active  = tasks.filter(t => ACTIVE.includes(t.status_id)).length;
+    const budget  = project.budgets?.[0] || null;
+    const hoursLogged = project.projecttimeactual || 0;
+
+    // Derived data
+    const rag       = calcRAG(tasks);
+    const burnRate  = calcBurnRate(tasks, hoursLogged, budget?.hours || null);
+    const nextSession = findNextSession(tasks);
+
+    // Project date range
+    const allStarts  = tasks.map(t => fmtDate(t.startdate)).filter(Boolean).sort();
+    const allTargets = tasks.map(t => fmtDate(t.targetdate)).filter(Boolean).sort();
+    const projectStart = fmtDate(project.dateoccurred);
+    const projectEnd   = allTargets.length ? allTargets[allTargets.length - 1] : null;
 
     const taskDetails = tasks.map(t => ({
-      id:         t.id,
-      summary:    t.summary,
-      status:     statusLabel(t.status_id),
-      status_id:  t.status_id,
-      agent:      agentName(t),
-      startdate:  fmtDate(t.startdate),
-      targetdate: fmtDate(t.targetdate),
+      id:          t.id,
+      summary:     t.summary,
+      status:      statusLabel(t.status_id),
+      status_id:   t.status_id,
+      agent:       agentName(t),
+      startdate:   fmtDate(t.startdate),
+      targetdate:  fmtDate(t.targetdate),
+      lastUpdated: t.last_update ? t.last_update.substring(0, 10) : null,
       hoursLogged: t.projecttimeactual || 0,
-      details:    t.details_html || (t.details ? `<p>${t.details}</p>` : ''),
-      milestone:  milestones.find(ms => ms.tickets_list.some(r => r.id === t.id))?.name || 'Other',
-      actions:    actionsMap[t.id] || [],
+      details:     t.details_html || (t.details ? `<p>${t.details}</p>` : ''),
+      milestone:   milestones.find(ms => ms.tickets_list.some(r => r.id === t.id))?.name || 'Other',
+      actions:     actionsMap[t.id] || [],
     }));
 
-    // Calculate milestone state from actual task statuses (don't trust ms.state - can be stale)
-    const CLOSED_IDS = [9, 16, 21];
-    const ACTIVE_IDS = [2, 22];
-
-    function calcMilestoneState(ms) {
-      const msTasks = ms.tickets_list.map(r => taskMap[r.id]).filter(Boolean);
-      if (msTasks.length === 0) return 0;
-      if (msTasks.every(t => CLOSED_IDS.includes(t.status_id))) return 2; // all closed = Complete
-      if (msTasks.some(t => ACTIVE_IDS.includes(t.status_id)))  return 1; // any active = Active
-      if (msTasks.some(t => CLOSED_IDS.includes(t.status_id)))  return 1; // some closed = Active/In Progress
-      return 0; // all pending = Pending
+    // Handle view notification
+    const viewResult = await viewPromise;
+    if (viewResult?.isFirst) {
+      notifyFirstView({
+        projectName: project.summary,
+        clientName:  project.client_name,
+        projectId,
+        token,
+      }).catch(() => {});
     }
 
     res.status(200).json({
@@ -172,21 +219,26 @@ export default async function handler(req, res) {
         client_id:     project.client_id,
         client_colour: project.colour || '#89b4fa',
         agent_name:    project.takenby || agentMap[project.agent_id] || 'Sondela Consulting',
+        startDate:     projectStart,
+        endDate:       projectEnd,
       },
       stats: {
-        total:        tasks.length,
+        total:          tasks.length,
         done,
         active,
-        pending:      tasks.length - done - active,
-        hoursLogged:  project.projecttimeactual || 0,
-        budgetHours:  budget?.hours || null,
+        pending:        tasks.length - done - active,
+        hoursLogged,
+        budgetHours:    budget?.hours || null,
         remainingHours: budget?.remaining_hours ?? null,
-        pctComplete:  tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0,
+        pctComplete:    tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0,
       },
+      rag,
+      burnRate,
+      nextSession,
       ganttCode:  lines.join('\n'),
       milestones: milestones.map(ms => ({
         name:      ms.name,
-        state:     calcMilestoneState(ms),   // calculated from actual tasks, not HaloPSA state
+        state:     calcMilestoneState(ms, taskMap),
         taskCount: ms.tickets_list.length,
       })),
       taskDetails,
