@@ -188,13 +188,21 @@ export default function ProjectPage() {
 
             {/* View switcher + controls */}
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px',flexWrap:'wrap',gap:'10px'}}>
-            <div style={s.viewSwitcher}>
-              {['gantt','schedule','kanban'].map(v=>(
-                <button key={v} onClick={()=>setView(v)}
-                  style={{...s.viewBtn,...(view===v?{...s.viewBtnActive,borderBottomColor:colour,color:colour}:{})}}>
-                  {v==='gantt'?'📊 Gantt':v==='schedule'?'📋 Schedule':'🗂 Kanban'}
-                </button>
-              ))}
+              <div style={s.viewSwitcher}>
+                {['gantt','schedule','kanban'].map(v=>(
+                  <button key={v} onClick={()=>setView(v)}
+                    style={{...s.viewBtn,...(view===v?{...s.viewBtnActive,borderBottomColor:colour,color:colour}:{})}}>
+                    {v==='gantt'?'📊 Gantt':v==='schedule'?'📋 Schedule':'🗂 Kanban'}
+                  </button>
+                ))}
+              </div>
+              {(view==='schedule'||view==='kanban') && (
+                <label style={{display:'flex',alignItems:'center',gap:'8px',cursor:'pointer',fontSize:'0.85em',color:'#a6adc8'}}>
+                  <input type="checkbox" checked={hideCompleted} onChange={e=>setHideCompleted(e.target.checked)}
+                    style={{accentColor:'#89b4fa',width:'15px',height:'15px',cursor:'pointer'}}/>
+                  Hide completed tasks
+                </label>
+              )}
             </div>
 
             {/* ── GANTT VIEW ── */}
