@@ -2,12 +2,27 @@ import { useEffect, useState, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 
+const CLOSED = [9, 16, 21];
+const ACTIVE  = [2, 22];
+
+function statusLabel(sid) {
+  if (CLOSED.includes(sid)) return 'Closed';
+  if (ACTIVE.includes(sid))  return 'In Progress';
+  return 'New';
+}
+function statusStyle(sid) {
+  if (CLOSED.includes(sid)) return { background:'#1e3a2e', color:'#a6e3a1', border:'1px solid #2d5a40' };
+  if (ACTIVE.includes(sid))  return { background:'#1e2e4a', color:'#89b4fa', border:'1px solid #2d4a6a' };
+  return { background:'#2e2e1e', color:'#f9e2af', border:'1px solid #4a4a2d' };
+}
+
 export default function ProjectPage() {
-  const { query } = useRouter();
-  const [data, setData]         = useState(null);
-  const [error, setError]       = useState(null);
-  const [loading, setLoading]   = useState(true);
+  const { query }             = useRouter();
+  const [data, setData]       = useState(null);
+  const [error, setError]     = useState(null);
+  const [loading, setLoading] = useState(true);
   const [lastFetch, setLastFetch] = useState(null);
+  const [view, setView]       = useState('gantt');   // 'gantt' | 'schedule' | 'kanban'
   const [selected, setSelected] = useState(null);
   const ganttRef     = useRef(null);
   const mermaidReady = useRef(false);
@@ -18,7 +33,7 @@ export default function ProjectPage() {
     try {
       const res  = await fetch(`/api/p/${query.token}`);
       const json = await res.json();
-      if (json.error) throw new Error(json.error);
+      if (json.error) throw new Error(`${json.error}||${json.reason||''}`);
       setData(json);
       setLastFetch(new Date());
     } catch (e) { setError(e.message); }
@@ -40,7 +55,7 @@ export default function ProjectPage() {
   useEffect(() => { if (query.token) load(); }, [query.token]);
 
   useEffect(() => {
-    if (!data || !ganttRef.current) return;
+    if (!data || !ganttRef.current || view !== 'gantt') return;
     const render = async () => {
       if (!window.mermaid) { setTimeout(render, 200); return; }
       const el = ganttRef.current;
@@ -50,21 +65,21 @@ export default function ProjectPage() {
       catch { el.innerHTML = `<pre style="color:#cdd6f4;font-size:0.75em;white-space:pre-wrap;line-height:1.7">${data.ganttCode}</pre>`; }
     };
     setTimeout(render, 150);
-  }, [data]);
+  }, [data, view]);
 
-  const title  = data ? `${data.project.client_name} — ${data.project.summary}` : 'Loading...';
-  const colour = data?.project?.client_colour || '#89b4fa';
-  const pct    = data?.stats?.pctComplete || 0;
+  const colour  = data?.project?.client_colour || '#89b4fa';
+  const pct     = data?.stats?.pctComplete || 0;
+  const title   = data ? `${data.project.client_name} — ${data.project.summary}` : 'Loading...';
 
   return (
     <>
       <Head><title>{title} | Sondela</title></Head>
       <style>{`
         @keyframes spin   { to { transform: rotate(360deg); } }
-        @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
-        .task-row:hover   { background:#252538 !important; border-color:#6272a4 !important; }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+        .task-row:hover   { background:#252538 !important; }
         .gantt-scroll::-webkit-scrollbar       { height:6px; width:6px; }
-        .gantt-scroll::-webkit-scrollbar-track { background:#1e1e2e; border-radius:3px; }
+        .gantt-scroll::-webkit-scrollbar-track { background:#1e1e2e; }
         .gantt-scroll::-webkit-scrollbar-thumb { background:#45475a; border-radius:3px; }
         .task-list-scroll::-webkit-scrollbar       { width:5px; }
         .task-list-scroll::-webkit-scrollbar-track { background:#1e1e2e; }
@@ -80,7 +95,24 @@ export default function ProjectPage() {
           </div>
         </header>
 
-        {error && <div style={s.errBox}>⚠️ {error}</div>}
+        {error && (() => {
+          const [msg, reason] = error.split('||');
+          const isAccess = reason === 'revoked' || reason === 'expired';
+          return (
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'70vh'}}>
+              <div style={{textAlign:'center',maxWidth:'440px',padding:'40px'}}>
+                <div style={{fontSize:'3em',marginBottom:'16px'}}>{reason==='expired'?'⏰':'🔒'}</div>
+                <h2 style={{color:'#cdd6f4',fontSize:'1.2em',marginBottom:'10px'}}>
+                  {reason==='expired'?'Link Expired':'Link Deactivated'}
+                </h2>
+                <p style={{color:'#6c7086',fontSize:'0.9em',lineHeight:1.6}}>{msg}</p>
+                <p style={{color:'#45475a',fontSize:'0.8em',marginTop:'16px'}}>
+                  Please contact Sondela Consulting if you believe this is an error.
+                </p>
+              </div>
+            </div>
+          );
+        })()}
         {loading && !data && (
           <div style={s.spinWrap}>
             <div style={s.spinDot}/>
@@ -90,28 +122,27 @@ export default function ProjectPage() {
 
         {data && (
           <main style={s.main}>
-
-            {/* Progress bar at top */}
-            <div style={{height:'4px',background:'#313244',borderRadius:'0',margin:'-28px -28px 28px',overflow:'hidden'}}>
+            {/* Progress bar */}
+            <div style={{height:'4px',background:'#313244',margin:'-28px -28px 28px',overflow:'hidden'}}>
               <div style={{height:'4px',background:colour,width:`${pct}%`,transition:'width 0.5s ease'}}/>
             </div>
 
-            {/* Title */}
+            {/* Title row */}
             <div style={s.titleRow}>
               <div>
-                <span style={{...s.clientBadge, color:colour, borderColor:colour+'50'}}>{data.project.client_name}</span>
+                <span style={{...s.clientBadge,color:colour,borderColor:colour+'50'}}>{data.project.client_name}</span>
                 <h1 style={s.h1}>{data.project.summary}</h1>
                 <p style={s.meta}>Managed by {data.project.agent_name} · <strong style={{color:colour}}>{pct}%</strong> complete</p>
               </div>
-              <div style={{display:'flex',gap:'8px',flexShrink:0}}>
+              <div style={{display:'flex',gap:'8px',flexShrink:0,alignItems:'center'}}>
                 <button style={s.emailBtn} onClick={()=>{
                   const url  = window.location.href;
                   const subj = encodeURIComponent(`Project Update: ${data.project.summary}`);
-                  const body = encodeURIComponent(`Hi,\n\nHere is a link to your live project status for "${data.project.summary}":\n\n${url}\n\nYou can see the timeline, tasks, and notes in real time — no login required.\n\nKind regards,\nSondela Consulting`);
-                  window.location.href = `mailto:?subject=${subj}&body=${body}`;
+                  const body = encodeURIComponent(`Hi,\n\nHere is a link to your live project status:\n\n${url}\n\nNo login required.\n\nKind regards,\nSondela Consulting`);
+                  window.location.href=`mailto:?subject=${subj}&body=${body}`;
                 }}>📧 Share</button>
                 <button style={s.refreshBtn} onClick={load} disabled={loading}>
-                  {loading ? '...' : '⟳ Refresh'}
+                  {loading?'...':'⟳ Refresh'}
                 </button>
               </div>
             </div>
@@ -137,8 +168,8 @@ export default function ProjectPage() {
             <div style={s.milestones}>
               {data.milestones.map((ms,i)=>{
                 const lbl=ms.state===2?'Complete':ms.state===1?'Active':'Pending';
-                const col=ms.state===2?'#a6e3a1':ms.state===1?'#89b4fa':'#f9e2af';
-                const bg =ms.state===2?'#1e3a2e':ms.state===1?'#1e2e4a':'#2e2e1e';
+                const col=ms.state===2?'#a6e3a1':ms.state===1?colour:'#f9e2af';
+                const bg =ms.state===2?'#1e3a2e':ms.state===1?colour+'22':'#2e2e1e';
                 return(
                   <div key={i} style={s.ms}>
                     <span style={s.msN}>{ms.name}</span>
@@ -149,69 +180,70 @@ export default function ProjectPage() {
               })}
             </div>
 
-            {/* ── GANTT + TASK LIST SIDE BY SIDE ── */}
-            <div style={s.mainRow}>
+            {/* View switcher */}
+            <div style={s.viewSwitcher}>
+              {['gantt','schedule','kanban'].map(v=>(
+                <button key={v} onClick={()=>setView(v)}
+                  style={{...s.viewBtn,...(view===v?{...s.viewBtnActive,borderBottomColor:colour,color:colour}:{})}}>
+                  {v==='gantt'?'📊 Gantt':v==='schedule'?'📋 Schedule':'🗂 Kanban'}
+                </button>
+              ))}
+            </div>
 
-              {/* Gantt — left, scrollable */}
-              <div style={s.ganttPanel}>
-                <div style={s.panelHdr}>
-                  <h2 style={s.panelTitle}>Project Timeline</h2>
-                  {loading && <span style={{fontSize:'0.78em',color:'#fab387'}}>Refreshing...</span>}
+            {/* ── GANTT VIEW ── */}
+            {view === 'gantt' && (
+              <div style={s.mainRow}>
+                <div style={s.ganttPanel}>
+                  <div style={s.panelHdr}>
+                    <h2 style={s.panelTitle}>Project Timeline</h2>
+                    {loading && <span style={{fontSize:'0.78em',color:'#fab387'}}>Refreshing...</span>}
+                  </div>
+                  <div className="gantt-scroll" style={s.ganttScroll}>
+                    <div className="mermaid" ref={ganttRef} style={{minWidth:'900px',minHeight:'300px'}}>{data.ganttCode}</div>
+                  </div>
                 </div>
-                {/* Fixed-height scroll container */}
-                <div
-                  className="gantt-scroll"
-                  style={s.ganttScroll}
-                >
-                  <div
-                    className="mermaid"
-                    ref={ganttRef}
-                    style={{minWidth:'900px',minHeight:'300px'}}
-                  >
-                    {data.ganttCode}
+                <div style={s.taskPanel}>
+                  <div style={s.panelHdr}>
+                    <h2 style={s.panelTitle}>Tasks</h2>
+                    <span style={{fontSize:'0.72em',color:'#6c7086'}}>Click for details</span>
+                  </div>
+                  <div className="task-list-scroll" style={s.taskScroll}>
+                    {data.taskDetails.map(t=>(
+                      <div key={t.id} className="task-row" onClick={()=>setSelected(p=>p?.id===t.id?null:t)}
+                        style={{...s.taskRow,...(selected?.id===t.id?s.taskRowActive:{})}}>
+                        <div style={s.taskTop}>
+                          <span style={{...s.pill,...statusStyle(t.status_id)}}>{statusLabel(t.status_id)}</span>
+                          {t.actions.length>0&&<span style={{fontSize:'0.68em',color:colour}}>💬 {t.actions.length}</span>}
+                        </div>
+                        <div style={s.taskName}>{t.summary}</div>
+                        <div style={s.taskMeta}>
+                          <span style={{color:'#6c7086',fontSize:'0.72em'}}>{t.milestone}</span>
+                          {t.hoursLogged>0&&<span style={{color:'#fab387',fontSize:'0.72em'}}>⏱ {t.hoursLogged.toFixed(1)}h</span>}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
+            )}
 
-              {/* Task list — right, scrollable */}
-              <div style={s.taskPanel}>
-                <div style={s.panelHdr}>
-                  <h2 style={s.panelTitle}>Tasks</h2>
-                  <span style={{fontSize:'0.72em',color:'#6c7086'}}>Click for details</span>
-                </div>
-                <div className="task-list-scroll" style={s.taskScroll}>
-                  {data.taskDetails.map(t=>(
-                    <div
-                      key={t.id}
-                      className="task-row"
-                      onClick={()=>setSelected(p=>p?.id===t.id?null:t)}
-                      style={{
-                        ...s.taskRow,
-                        ...(selected?.id===t.id?s.taskRowActive:{}),
-                      }}
-                    >
-                      <div style={s.taskTop}>
-                        <span style={{...s.pill,...statusStyle(t.status_id)}}>{t.status}</span>
-                        {t.actions.length>0&&<span style={s.notesBadge}>💬 {t.actions.length}</span>}
-                      </div>
-                      <div style={s.taskName}>{t.summary}</div>
-                      <div style={s.taskMeta}>
-                        <span style={{color:'#6c7086',fontSize:'0.72em'}}>{t.milestone}</span>
-                        {t.hoursLogged>0&&<span style={{color:'#fab387',fontSize:'0.72em'}}>⏱ {t.hoursLogged.toFixed(1)}h</span>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            {/* ── SCHEDULE VIEW ── */}
+            {view === 'schedule' && (
+              <ScheduleView data={data} selected={selected} setSelected={setSelected} colour={colour}/>
+            )}
 
-            {/* ── DETAIL PANEL ── */}
+            {/* ── KANBAN VIEW ── */}
+            {view === 'kanban' && (
+              <KanbanView data={data} selected={selected} setSelected={setSelected} colour={colour}/>
+            )}
+
+            {/* ── DETAIL PANEL (shared across views) ── */}
             {selected && (
               <div style={s.detail}>
                 <div style={s.detailHdr}>
                   <div style={{flex:1}}>
                     <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'8px',flexWrap:'wrap'}}>
-                      <span style={{...s.pill,...statusStyle(selected.status_id)}}>{selected.status}</span>
+                      <span style={{...s.pill,...statusStyle(selected.status_id)}}>{statusLabel(selected.status_id)}</span>
                       <span style={{fontSize:'0.78em',color:'#6c7086'}}>{selected.milestone}</span>
                       <span style={{fontSize:'0.78em',color:'#6c7086'}}>#{selected.id}</span>
                     </div>
@@ -219,8 +251,6 @@ export default function ProjectPage() {
                   </div>
                   <button style={s.closeBtn} onClick={()=>setSelected(null)}>✕ Close</button>
                 </div>
-
-                {/* Info grid */}
                 <div style={s.infoGrid}>
                   {[
                     {l:'Assigned to', v:selected.agent},
@@ -234,36 +264,30 @@ export default function ProjectPage() {
                     </div>
                   ))}
                 </div>
-
-                {/* Description */}
-                {selected.details?.trim() && (
+                {selected.details?.trim()&&(
                   <div style={s.block}>
                     <div style={s.blockLbl}>Description</div>
                     <div style={s.blockBody} dangerouslySetInnerHTML={{__html:selected.details}}/>
                   </div>
                 )}
-
-                {/* Actions / notes */}
                 <div style={s.blockLbl}>Updates &amp; Notes</div>
                 {selected.actions.length>0 ? selected.actions.map(a=>(
                   <div key={a.id} style={s.actionCard}>
                     <div style={s.actionMeta}>
-                      <span style={{fontWeight:600,color:"#89b4fa"}}>{a.label && <span style={{fontSize:"0.78em",color:"#fab387",marginRight:"6px"}}>[{a.label}]</span>}{a.who}</span>
+                      <span style={{fontWeight:600,color:colour}}>{a.who}</span>
                       {a.date&&<span style={{color:'#6c7086'}}>{a.date}</span>}
                       {a.timetaken>0&&<span style={{color:'#fab387'}}>⏱ {a.timetaken.toFixed(1)}h</span>}
                       {a.outcome&&<span style={{color:'#a6adc8',fontStyle:'italic'}}>{a.outcome}</span>}
                     </div>
                     <div style={s.actionBody}>{a.note}</div>
                   </div>
-                )) : (
-                  <div style={s.noNotes}>No public notes on this task yet.</div>
-                )}
+                )) : <div style={s.noNotes}>No public notes on this task yet.</div>}
               </div>
             )}
 
             <footer style={s.footer}>
               <span>Powered by <strong>Sondela Consulting</strong> · Live HaloPSA Data</span>
-              <a href="https://sondelaconsulting.com" target="_blank" rel="noreferrer" style={{color:'#89b4fa'}}>sondelaconsulting.com</a>
+              <a href="https://sondelaconsulting.com" target="_blank" rel="noreferrer" style={{color:colour}}>sondelaconsulting.com</a>
             </footer>
           </main>
         )}
@@ -272,12 +296,165 @@ export default function ProjectPage() {
   );
 }
 
-function statusStyle(sid) {
-  if ([9,16,21].includes(sid)) return {background:'#1e3a2e',color:'#a6e3a1'};
-  if ([2,22].includes(sid))    return {background:'#1e2e4a',color:'#89b4fa'};
-  return {background:'#2e2e1e',color:'#f9e2af'};
+// ── SCHEDULE VIEW COMPONENT ──────────────────────────────────────────────────
+function ScheduleView({ data, selected, setSelected, colour }) {
+  const tasksByMilestone = {};
+  data.milestones.forEach(ms => {
+    tasksByMilestone[ms.name] = {
+      milestone: ms,
+      tasks: data.taskDetails.filter(t => t.milestone === ms.name),
+    };
+  });
+  const other = data.taskDetails.filter(t => t.milestone === 'Other');
+
+  const totalH = data.stats.budgetHours || 0;
+
+  return (
+    <div style={sv.wrap}>
+      {/* Table header */}
+      <div style={sv.tableHead}>
+        <div style={{...sv.col, width:'140px'}}>Status</div>
+        <div style={{...sv.col, flex:1}}>Summary</div>
+        <div style={{...sv.col, width:'100px'}}>Start Date</div>
+        <div style={{...sv.col, width:'100px'}}>Target Date</div>
+        <div style={{...sv.col, width:'80px'}}>Time Taken</div>
+        <div style={{...sv.col, width:'160px'}}>Agent</div>
+        <div style={{...sv.col, width:'90px'}}>Budget %</div>
+      </div>
+
+      {Object.values(tasksByMilestone).map(({ milestone: ms, tasks }) => {
+        if (tasks.length === 0) return null;
+        const msHours = tasks.reduce((a, t) => a + t.hoursLogged, 0);
+        const msCol   = ms.state===2?'#a6e3a1':ms.state===1?colour:'#f9e2af';
+        return (
+          <div key={ms.name}>
+            {/* Milestone header row */}
+            <div style={{...sv.msRow, borderLeftColor: msCol}}>
+              <div style={{...sv.msLabel, color: msCol}}>▼ {ms.name}</div>
+              <div style={sv.msMeta}>
+                {tasks.length} tasks · {msHours.toFixed(1)}h logged
+              </div>
+            </div>
+            {/* Task rows */}
+            {tasks.map((t, i) => {
+              const pct = totalH > 0 ? Math.min(100, Math.round((t.hoursLogged / totalH) * 100)) : 0;
+              return (
+                <div key={t.id}
+                  onClick={() => setSelected(p => p?.id===t.id?null:t)}
+                  style={{
+                    ...sv.taskRow,
+                    background: selected?.id===t.id ? '#1e2535' : i%2===0 ? '#252535' : '#1e1e2e',
+                    borderLeft: selected?.id===t.id ? `3px solid ${colour}` : '3px solid transparent',
+                  }}>
+                  <div style={{width:'140px',flexShrink:0}}>
+                    <span style={{...sv.pill,...statusStyle(t.status_id)}}>{statusLabel(t.status_id)}</span>
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={sv.taskName}>{t.summary}</div>
+                    {t.actions.length>0&&<span style={{fontSize:'0.68em',color:colour}}>💬 {t.actions.length} note{t.actions.length>1?'s':''}</span>}
+                  </div>
+                  <div style={{width:'100px',flexShrink:0,fontSize:'0.78em',color:'#a6adc8'}}>{t.startdate||'—'}</div>
+                  <div style={{width:'100px',flexShrink:0,fontSize:'0.78em',color:'#a6adc8'}}>{t.targetdate||'—'}</div>
+                  <div style={{width:'80px',flexShrink:0,fontSize:'0.78em',color:'#fab387',textAlign:'center'}}>
+                    {t.hoursLogged>0?`${t.hoursLogged.toFixed(1)}h`:'—'}
+                  </div>
+                  <div style={{width:'160px',flexShrink:0,fontSize:'0.75em',color:'#6c7086',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.agent}</div>
+                  <div style={{width:'90px',flexShrink:0}}>
+                    <div style={sv.budgetTrack}>
+                      <div style={{...sv.budgetBar,width:`${pct}%`,background:colour}}/>
+                    </div>
+                    <div style={{fontSize:'0.65em',color:'#6c7086',textAlign:'center',marginTop:'2px'}}>{pct}%</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+
+      {other.length > 0 && (
+        <div>
+          <div style={{...sv.msRow, borderLeftColor:'#45475a'}}>
+            <div style={{...sv.msLabel, color:'#6c7086'}}>▼ Other Tasks</div>
+          </div>
+          {other.map((t, i) => (
+            <div key={t.id}
+              onClick={() => setSelected(p => p?.id===t.id?null:t)}
+              style={{
+                ...sv.taskRow,
+                background: selected?.id===t.id ? '#1e2535' : i%2===0 ? '#252535' : '#1e1e2e',
+                borderLeft: selected?.id===t.id ? `3px solid ${colour}` : '3px solid transparent',
+              }}>
+              <div style={{width:'140px',flexShrink:0}}>
+                <span style={{...sv.pill,...statusStyle(t.status_id)}}>{statusLabel(t.status_id)}</span>
+              </div>
+              <div style={{flex:1,minWidth:0,fontSize:'0.82em',color:'#cdd6f4'}}>{t.summary}</div>
+              <div style={{width:'100px',flexShrink:0,fontSize:'0.78em',color:'#a6adc8'}}>{t.startdate||'—'}</div>
+              <div style={{width:'100px',flexShrink:0,fontSize:'0.78em',color:'#a6adc8'}}>{t.targetdate||'—'}</div>
+              <div style={{width:'80px',flexShrink:0,fontSize:'0.78em',color:'#fab387',textAlign:'center'}}>
+                {t.hoursLogged>0?`${t.hoursLogged.toFixed(1)}h`:'—'}
+              </div>
+              <div style={{width:'160px',flexShrink:0,fontSize:'0.75em',color:'#6c7086'}}>{t.agent}</div>
+              <div style={{width:'90px',flexShrink:0}}/>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
+// ── KANBAN VIEW COMPONENT ────────────────────────────────────────────────────
+function KanbanView({ data, selected, setSelected, colour }) {
+  const columns = [
+    { label: '📋 New',         filter: t => !CLOSED.includes(t.status_id) && !ACTIVE.includes(t.status_id), colour: '#f9e2af', bg: '#2e2e1e' },
+    { label: '🔄 In Progress', filter: t => ACTIVE.includes(t.status_id),                                   colour: '#89b4fa', bg: '#1e2e4a' },
+    { label: '✅ Completed',   filter: t => CLOSED.includes(t.status_id),                                   colour: '#a6e3a1', bg: '#1e3a2e' },
+  ];
+
+  return (
+    <div style={kv.board}>
+      {columns.map(col => {
+        const tasks = data.taskDetails.filter(col.filter);
+        return (
+          <div key={col.label} style={kv.column}>
+            <div style={{...kv.colHeader, color: col.colour, borderBottomColor: col.colour}}>
+              <span>{col.label}</span>
+              <span style={kv.badge}>{tasks.length}</span>
+            </div>
+            <div style={kv.cards}>
+              {tasks.length === 0 && (
+                <div style={kv.empty}>No tasks</div>
+              )}
+              {tasks.map(t => (
+                <div key={t.id}
+                  onClick={() => setSelected(p => p?.id===t.id?null:t)}
+                  style={{
+                    ...kv.card,
+                    background: selected?.id===t.id ? '#252545' : '#252535',
+                    border: selected?.id===t.id ? `1px solid ${colour}` : '1px solid #45475a',
+                  }}>
+                  <div style={kv.cardMs}>{t.milestone}</div>
+                  <div style={kv.cardTitle}>{t.summary}</div>
+                  <div style={kv.cardFoot}>
+                    <span style={kv.cardAgent}>{t.agent}</span>
+                    <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
+                      {t.hoursLogged>0&&<span style={{fontSize:'0.68em',color:'#fab387'}}>⏱{t.hoursLogged.toFixed(1)}h</span>}
+                      {t.actions.length>0&&<span style={{fontSize:'0.68em',color:colour}}>💬{t.actions.length}</span>}
+                      {t.startdate&&<span style={{fontSize:'0.65em',color:'#6c7086'}}>{t.startdate}</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── STYLES ───────────────────────────────────────────────────────────────────
 const s = {
   page:        {minHeight:'100vh',background:'#1e1e2e',color:'#cdd6f4',fontFamily:'Segoe UI,Arial,sans-serif'},
   header:      {background:'#181825',borderBottom:'1px solid #313244',padding:'14px 30px'},
@@ -289,35 +466,36 @@ const s = {
   spinDot:     {width:'36px',height:'36px',border:'3px solid #313244',borderTopColor:'#89b4fa',borderRadius:'50%',animation:'spin 0.8s linear infinite'},
   main:        {maxWidth:'1500px',margin:'0 auto',padding:'28px'},
   titleRow:    {display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'20px',gap:'20px',flexWrap:'wrap'},
-  clientBadge: {display:'inline-block',background:'#313244',color:'#89b4fa',border:'1px solid #45475a',borderRadius:'20px',fontSize:'0.78em',padding:'4px 14px',marginBottom:'8px'},
+  clientBadge: {display:'inline-block',background:'#313244',border:'1px solid',borderRadius:'20px',fontSize:'0.78em',padding:'4px 14px',marginBottom:'8px'},
   h1:          {fontSize:'1.4em',color:'#cdd6f4',fontWeight:700,lineHeight:1.3,marginBottom:'4px'},
   meta:        {fontSize:'0.82em',color:'#6c7086',margin:0},
   emailBtn:    {background:'#313244',color:'#cdd6f4',border:'1px solid #45475a',borderRadius:'8px',padding:'9px 14px',fontSize:'0.85em',cursor:'pointer',whiteSpace:'nowrap'},
-  refreshBtn:  {background:'#313244',color:'#cdd6f4',border:'1px solid #45475a',borderRadius:'8px',padding:'9px 18px',fontSize:'0.85em',cursor:'pointer',whiteSpace:'nowrap',flexShrink:0},
+  refreshBtn:  {background:'#313244',color:'#cdd6f4',border:'1px solid #45475a',borderRadius:'8px',padding:'9px 18px',fontSize:'0.85em',cursor:'pointer',whiteSpace:'nowrap'},
   stats:       {display:'flex',gap:'10px',marginBottom:'16px',flexWrap:'wrap'},
   stat:        {background:'#313244',border:'1px solid #45475a',borderRadius:'10px',padding:'12px 16px',flex:1,minWidth:'90px'},
   statV:       {fontSize:'1.5em',fontWeight:700,color:'#cdd6f4'},
   statL:       {fontSize:'0.7em',color:'#6c7086',marginTop:'2px'},
-  milestones:  {display:'flex',flexWrap:'wrap',gap:'6px',marginBottom:'20px'},
+  milestones:  {display:'flex',flexWrap:'wrap',gap:'6px',marginBottom:'16px'},
   ms:          {display:'flex',alignItems:'center',gap:'7px',background:'#313244',border:'1px solid #45475a',borderRadius:'8px',padding:'6px 12px',fontSize:'0.78em'},
   msN:         {color:'#cdd6f4'},
   msM:         {color:'#6c7086',fontSize:'0.85em'},
   msS:         {fontSize:'0.8em',padding:'2px 8px',borderRadius:'10px',fontWeight:600},
-  // Main two-column layout
+  // View switcher
+  viewSwitcher:{display:'flex',gap:'0',marginBottom:'16px',background:'#181825',borderRadius:'10px',padding:'4px',width:'fit-content'},
+  viewBtn:     {background:'transparent',border:'none',color:'#6c7086',padding:'8px 20px',borderRadius:'7px',cursor:'pointer',fontSize:'0.85em',fontWeight:500,borderBottom:'2px solid transparent',transition:'all 0.15s'},
+  viewBtnActive:{background:'#313244',color:'#cdd6f4',fontWeight:700},
+  // Gantt
   mainRow:     {display:'flex',gap:'16px',alignItems:'flex-start',marginBottom:'20px'},
-  // Gantt panel
   ganttPanel:  {flex:1,minWidth:0,background:'#313244',border:'1px solid #45475a',borderRadius:'12px',padding:'20px'},
   panelHdr:    {display:'flex',alignItems:'center',gap:'12px',marginBottom:'14px',flexWrap:'wrap'},
   panelTitle:  {fontSize:'0.9em',color:'#a6adc8',fontWeight:600,margin:0},
   ganttScroll: {overflowX:'auto',overflowY:'auto',maxHeight:'520px',paddingBottom:'8px'},
-  // Task list panel
   taskPanel:   {width:'260px',flexShrink:0,background:'#313244',border:'1px solid #45475a',borderRadius:'12px',padding:'16px',display:'flex',flexDirection:'column'},
   taskScroll:  {overflowY:'auto',maxHeight:'480px',display:'flex',flexDirection:'column',gap:'6px'},
   taskRow:     {background:'#1e1e2e',border:'1px solid #313244',borderRadius:'8px',padding:'10px 12px',cursor:'pointer',transition:'all 0.15s'},
-  taskRowActive:{background:'#1e2535 !important',border:'1px solid #89b4fa'},
+  taskRowActive:{background:'#1e2535',border:'1px solid #89b4fa'},
   taskTop:     {display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'5px'},
   pill:        {fontSize:'0.68em',padding:'2px 8px',borderRadius:'8px',fontWeight:600},
-  notesBadge:  {fontSize:'0.68em',color:'#89b4fa'},
   taskName:    {fontSize:'0.8em',color:'#cdd6f4',lineHeight:1.35,marginBottom:'5px'},
   taskMeta:    {display:'flex',justifyContent:'space-between',alignItems:'center'},
   // Detail panel
@@ -337,4 +515,34 @@ const s = {
   actionBody:  {fontSize:'0.84em',color:'#cdd6f4',lineHeight:1.7,whiteSpace:'pre-wrap'},
   noNotes:     {fontSize:'0.84em',color:'#6c7086',fontStyle:'italic',padding:'12px 0'},
   footer:      {display:'flex',justifyContent:'space-between',fontSize:'0.8em',color:'#6c7086',flexWrap:'wrap',gap:'8px',paddingTop:'8px'},
+};
+
+// Schedule view styles
+const sv = {
+  wrap:        {background:'#313244',border:'1px solid #45475a',borderRadius:'12px',overflow:'hidden',marginBottom:'20px'},
+  tableHead:   {display:'flex',alignItems:'center',background:'#181825',padding:'10px 16px',borderBottom:'1px solid #45475a',gap:'8px'},
+  col:         {fontSize:'0.72em',color:'#6c7086',textTransform:'uppercase',letterSpacing:'0.06em',flexShrink:0},
+  msRow:       {display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 16px',background:'#1e1e2e',borderBottom:'1px solid #313244',borderLeft:'3px solid',marginTop:'2px'},
+  msLabel:     {fontSize:'0.82em',fontWeight:700},
+  msMeta:      {fontSize:'0.72em',color:'#6c7086'},
+  taskRow:     {display:'flex',alignItems:'center',padding:'10px 16px',cursor:'pointer',gap:'8px',borderBottom:'1px solid #313244',transition:'background 0.1s'},
+  taskName:    {fontSize:'0.82em',color:'#cdd6f4',lineHeight:1.35},
+  pill:        {fontSize:'0.68em',padding:'2px 8px',borderRadius:'8px',fontWeight:600},
+  budgetTrack: {height:'4px',background:'#1e1e2e',borderRadius:'2px'},
+  budgetBar:   {height:'4px',borderRadius:'2px'},
+};
+
+// Kanban styles
+const kv = {
+  board:     {display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'16px',marginBottom:'20px',alignItems:'start'},
+  column:    {background:'#252535',border:'1px solid #45475a',borderRadius:'12px',overflow:'hidden'},
+  colHeader: {display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 16px',borderBottom:'2px solid',fontWeight:700,fontSize:'0.9em'},
+  badge:     {background:'#1e1e2e',borderRadius:'12px',padding:'2px 10px',fontSize:'0.75em',color:'#cdd6f4'},
+  cards:     {padding:'10px',display:'flex',flexDirection:'column',gap:'8px',minHeight:'100px'},
+  card:      {borderRadius:'10px',padding:'12px 14px',cursor:'pointer',transition:'border-color 0.15s'},
+  cardMs:    {fontSize:'0.68em',color:'#6c7086',marginBottom:'5px',textTransform:'uppercase',letterSpacing:'0.04em'},
+  cardTitle: {fontSize:'0.82em',color:'#cdd6f4',lineHeight:1.4,marginBottom:'8px',fontWeight:500},
+  cardFoot:  {display:'flex',justifyContent:'space-between',alignItems:'center',gap:'6px',flexWrap:'wrap'},
+  cardAgent: {fontSize:'0.7em',color:'#6c7086',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'100px'},
+  empty:     {fontSize:'0.8em',color:'#45475a',textAlign:'center',padding:'20px',fontStyle:'italic'},
 };

@@ -1,4 +1,5 @@
 import { haloFetch } from '../../../lib/halo';
+import { isLinkValid } from '../../../lib/redis';
 import { verifyProject } from '../../../lib/token';
 
 const CLOSED = [9, 16, 21];
@@ -55,6 +56,17 @@ export default async function handler(req, res) {
   const projectId = verifyProject(token);
   if (!projectId) {
     return res.status(404).json({ error: 'Project not found' });
+  }
+
+  // Check revocation and expiry
+  const linkCheck = await isLinkValid(projectId);
+  if (!linkCheck.valid) {
+    return res.status(410).json({
+      error: linkCheck.reason === 'expired'
+        ? 'This project link has expired.'
+        : 'This project link has been deactivated.',
+      reason: linkCheck.reason,
+    });
   }
 
   try {

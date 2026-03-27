@@ -8,7 +8,8 @@ export default function Home() {
   const [search, setSearch]         = useState('');
   const [copied, setCopied]         = useState(null);
   const [groupBy, setGroupBy]       = useState('client'); // 'client' | 'all'
-  const [emailModal, setEmailModal] = useState(null); // { project }
+  const [emailModal, setEmailModal] = useState(null);
+  const [linkMgr, setLinkMgr]     = useState(null); // { project, meta }
 
   useEffect(() => {
     fetch('/api/projects')
@@ -54,6 +55,12 @@ export default function Home() {
     );
     window.location.href = `mailto:${toEmail}?subject=${subj}&body=${body}`;
     setEmailModal(null);
+  }
+
+  async function openLinkMgr(p) {
+    const res  = await fetch(`/api/admin/link/${p.token}`);
+    const meta = await res.json();
+    setLinkMgr({ project: p, meta });
   }
 
   const statusColour = (s) => s === 9 ? '#a6e3a1' : s === 2 ? '#89b4fa' : '#f9e2af';
@@ -126,7 +133,7 @@ export default function Home() {
                   <span style={s.clientCount}>{group.projects.length} project{group.projects.length!==1?'s':''}</span>
                 </div>
                 <div style={s.grid}>
-                  {group.projects.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} shareUrl={getShareUrl(p)} statusColour={statusColour} statusLabel={statusLabel}/>)}
+                  {group.projects.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} onLinkMgr={openLinkMgr} shareUrl={getShareUrl(p)} statusColour={statusColour} statusLabel={statusLabel}/>)}
                 </div>
               </div>
             ))
@@ -135,7 +142,7 @@ export default function Home() {
           {/* Flat list */}
           {!loading && groupBy === 'all' && (
             <div style={s.grid}>
-              {filtered.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} shareUrl={getShareUrl(p)} statusColour={statusColour} statusLabel={statusLabel}/>)}
+              {filtered.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} onLinkMgr={openLinkMgr} shareUrl={getShareUrl(p)} statusColour={statusColour} statusLabel={statusLabel}/>)}
               {filtered.length === 0 && <p style={s.empty}>No projects match your search.</p>}
             </div>
           )}
@@ -146,11 +153,20 @@ export default function Home() {
       {emailModal && (
         <EmailModal project={emailModal} onSend={sendEmail} onClose={()=>setEmailModal(null)}/>
       )}
+
+      {/* Link manager modal */}
+      {linkMgr && (
+        <LinkMgrModal
+          project={linkMgr.project}
+          initialMeta={linkMgr.meta}
+          onClose={()=>setLinkMgr(null)}
+        />
+      )}
     </>
   );
 }
 
-function ProjectCard({ p, copied, onCopy, onEmail, shareUrl, statusColour, statusLabel }) {
+function ProjectCard({ p, copied, onCopy, onEmail, onLinkMgr, shareUrl, statusColour, statusLabel }) {
   const viewUrl = `/p/${p.token}`;
   return (
     <div className="proj-card" style={{...s.card, borderColor: p.client_colour + '40'}}>
@@ -184,6 +200,9 @@ function ProjectCard({ p, copied, onCopy, onEmail, shareUrl, statusColour, statu
         </button>
         <button style={s.btnIcon} onClick={()=>onEmail(p)} title="Share via email">
           📧
+        </button>
+        <button style={s.btnIcon} onClick={()=>onLinkMgr(p)} title="Manage link access">
+          🔐
         </button>
         <a href={`/client/${p.client_id}`} style={s.btnIcon} title='All client projects for this client'>
           👤
@@ -275,3 +294,132 @@ const s = {
   modalActions: {display:'flex',gap:'10px'},
   btnCancel:    {background:'#45475a',border:'none',color:'#cdd6f4',borderRadius:'6px',padding:'8px 16px',fontSize:'0.85em',cursor:'pointer'},
 };
+
+function LinkMgrModal({ project, initialMeta, onClose }) {
+  const [revoked,   setRevoked]   = useState(initialMeta.revoked || false);
+  const [expiresAt, setExpiresAt] = useState(initialMeta.expiresAt ? initialMeta.expiresAt.substring(0,10) : '');
+  const [saving,    setSaving]    = useState(false);
+  const [saved,     setSaved]     = useState(false);
+
+  async function save() {
+    setSaving(true);
+    await fetch(`/api/admin/link/${project.token}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        revoked,
+        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+      }),
+    });
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/p/${project.token}` : '';
+  const isExpired = expiresAt && new Date(expiresAt) < new Date();
+
+  return (
+    <div style={s.modalOverlay} onClick={onClose}>
+      <div style={{...s.modal, maxWidth:'500px'}} onClick={e=>e.stopPropagation()}>
+        <h3 style={s.modalTitle}>🔐 Manage Link Access</h3>
+        <p style={s.modalSub}>{project.client_name} · {project.summary}</p>
+
+        {/* Status indicator */}
+        <div style={{
+          background: revoked || isExpired ? '#2a1520' : '#1e3a2e',
+          border: `1px solid ${revoked || isExpired ? '#f38ba8' : '#a6e3a1'}`,
+          borderRadius: '8px',
+          padding: '10px 14px',
+          marginBottom: '20px',
+          fontSize: '0.82em',
+          color: revoked || isExpired ? '#f38ba8' : '#a6e3a1',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}>
+          {revoked ? '🔒 Link is revoked — clients cannot access this project' :
+           isExpired ? '⏰ Link has expired — clients cannot access this project' :
+           '✅ Link is active — clients can access this project'}
+        </div>
+
+        {/* Revoke toggle */}
+        <div style={{background:'#1e1e2e',borderRadius:'10px',padding:'16px',marginBottom:'14px'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div>
+              <div style={{fontSize:'0.88em',color:'#cdd6f4',fontWeight:600,marginBottom:'3px'}}>Revoke Access</div>
+              <div style={{fontSize:'0.76em',color:'#6c7086'}}>Immediately block all access to this project link</div>
+            </div>
+            <button
+              onClick={() => setRevoked(r => !r)}
+              style={{
+                background: revoked ? '#f38ba8' : '#313244',
+                color:      revoked ? '#1e1e2e' : '#cdd6f4',
+                border:     revoked ? 'none' : '1px solid #45475a',
+                borderRadius: '8px',
+                padding:    '8px 16px',
+                cursor:     'pointer',
+                fontWeight: 700,
+                fontSize:   '0.82em',
+                minWidth:   '100px',
+              }}>
+              {revoked ? '🔒 Revoked' : 'Revoke'}
+            </button>
+          </div>
+        </div>
+
+        {/* Expiry date */}
+        <div style={{background:'#1e1e2e',borderRadius:'10px',padding:'16px',marginBottom:'20px'}}>
+          <div style={{fontSize:'0.88em',color:'#cdd6f4',fontWeight:600,marginBottom:'3px'}}>Link Expiry Date</div>
+          <div style={{fontSize:'0.76em',color:'#6c7086',marginBottom:'10px'}}>
+            After this date the link will automatically stop working. Leave blank for no expiry.
+          </div>
+          <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+            <input
+              type="date"
+              value={expiresAt}
+              onChange={e => setExpiresAt(e.target.value)}
+              min={new Date().toISOString().substring(0,10)}
+              style={{
+                flex:1,
+                background:'#313244',
+                border: isExpired ? '1px solid #f38ba8' : '1px solid #45475a',
+                borderRadius:'6px',
+                padding:'8px 12px',
+                color:'#cdd6f4',
+                fontSize:'0.88em',
+              }}
+            />
+            {expiresAt && (
+              <button onClick={()=>setExpiresAt('')}
+                style={{background:'#45475a',border:'none',color:'#cdd6f4',borderRadius:'6px',padding:'8px 12px',cursor:'pointer',fontSize:'0.82em'}}>
+                Clear
+              </button>
+            )}
+          </div>
+          {isExpired && (
+            <div style={{fontSize:'0.75em',color:'#f38ba8',marginTop:'6px'}}>⚠️ This date is in the past — link is already expired</div>
+          )}
+        </div>
+
+        {/* Share URL preview */}
+        <div style={{background:'#1e1e2e',borderRadius:'8px',padding:'10px 14px',marginBottom:'20px'}}>
+          <div style={{fontSize:'0.7em',color:'#6c7086',marginBottom:'4px',textTransform:'uppercase',letterSpacing:'0.05em'}}>Shareable URL</div>
+          <div style={{fontSize:'0.75em',color:revoked||isExpired?'#45475a':'#89b4fa',fontFamily:'monospace',wordBreak:'break-all'}}>
+            {shareUrl}
+          </div>
+        </div>
+
+        <div style={s.modalActions}>
+          <button
+            style={{...s.btnView, background: saved?'#a6e3a1':undefined, color: saved?'#1e1e2e':undefined}}
+            onClick={save}
+            disabled={saving}>
+            {saving ? 'Saving...' : saved ? '✅ Saved!' : 'Save Changes'}
+          </button>
+          <button style={s.btnCancel} onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
