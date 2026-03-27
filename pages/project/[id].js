@@ -177,7 +177,7 @@ export default function ProjectPage() {
                     >
                       <div style={s.taskTop}>
                         <span style={{...s.pill,...statusStyle(t.status_id)}}>{t.status}</span>
-                        {t.notes.length>0&&<span style={s.notesBadge}>💬 {t.notes.length}</span>}
+                        {t.actions.length>0&&<span style={s.notesBadge}>💬 {t.actions.length}</span>}
                       </div>
                       <div style={s.taskName}>{t.summary}</div>
                       <div style={s.taskMeta}>
@@ -230,7 +230,7 @@ export default function ProjectPage() {
 
                 {/* Actions / notes */}
                 <div style={s.blockLbl}>Updates &amp; Notes</div>
-                {selected.notes.length>0 ? selected.notes.map(a=>(
+                {selected.actions.length>0 ? selected.actions.map(a=>(
                   <div key={a.id} style={s.actionCard}>
                     <div style={s.actionMeta}>
                       <span style={{fontWeight:600,color:"#89b4fa"}}>{a.label && <span style={{fontSize:"0.78em",color:"#fab387",marginRight:"6px"}}>[{a.label}]</span>}{a.who}</span>
@@ -238,7 +238,7 @@ export default function ProjectPage() {
                       {a.timetaken>0&&<span style={{color:'#fab387'}}>⏱ {a.timetaken.toFixed(1)}h</span>}
                       {a.outcome&&<span style={{color:'#a6adc8',fontStyle:'italic'}}>{a.outcome}</span>}
                     </div>
-                    <div style={s.actionBody} dangerouslySetInnerHTML={{__html:a.html}}/>
+                    <div style={s.actionBody}>{a.note}</div>
                   </div>
                 )) : (
                   <div style={s.noNotes}>No public notes on this task yet.</div>
@@ -318,7 +318,7 @@ const s = {
   blockBody:   {fontSize:'0.84em',color:'#cdd6f4',lineHeight:1.7},
   actionCard:  {background:'#1e1e2e',borderRadius:'8px',padding:'14px',marginBottom:'8px'},
   actionMeta:  {display:'flex',gap:'10px',fontSize:'0.75em',marginBottom:'8px',flexWrap:'wrap',alignItems:'center'},
-  actionBody:  {fontSize:'0.84em',color:'#cdd6f4',lineHeight:1.7},
+  actionBody:  {fontSize:'0.84em',color:'#cdd6f4',lineHeight:1.7,whiteSpace:'pre-wrap'},
   noNotes:     {fontSize:'0.84em',color:'#6c7086',fontStyle:'italic',padding:'12px 0'},
   footer:      {display:'flex',justifyContent:'space-between',fontSize:'0.8em',color:'#6c7086',flexWrap:'wrap',gap:'8px',paddingTop:'8px'},
 };
