@@ -121,7 +121,7 @@ export default function ProjectPage() {
         })()}
         {loading && !data && (
           <div style={s.spinWrap}>
-            <div style={s.spinDot}/>
+            <div style={s.spinDot}></div>
             <p style={{color:'#a6adc8'}}>Loading from HaloPSA...</p>
           </div>
         )}
@@ -284,7 +284,7 @@ export default function ProjectPage() {
                 {selected.details?.trim()&&(
                   <div style={s.block}>
                     <div style={s.blockLbl}>Description</div>
-                    <div style={s.blockBody} dangerouslySetInnerHTML={{__html:selected.details}}/>
+                    <div style={s.blockBody} dangerouslySetInnerHTML={{__html:selected.details}}></div>
                   </div>
                 )}
                 <div style={s.blockLbl}>Updates &amp; Notes</div>
@@ -405,7 +405,7 @@ function ScheduleView({ data, selected, setSelected, colour, hideCompleted, coll
                   <div style={{width:'160px',flexShrink:0,fontSize:'0.75em',color:'#6c7086',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.agent}</div>
                   <div style={{width:'90px',flexShrink:0}}>
                     <div style={sv.budgetTrack}>
-                      <div style={{...sv.budgetBar,width:`${pct}%`,background:colour}}/>
+                      <div style={{...sv.budgetBar,width:`${pct}%`,background:colour}}></div>
                     </div>
                     <div style={{fontSize:'0.65em',color:'#6c7086',textAlign:'center',marginTop:'2px'}}>{pct}%</div>
                   </div>
@@ -447,7 +447,7 @@ function ScheduleView({ data, selected, setSelected, colour, hideCompleted, coll
                 {t.hoursLogged>0?`${t.hoursLogged.toFixed(1)}h`:'—'}
               </div>
               <div style={{width:'160px',flexShrink:0,fontSize:'0.75em',color:'#6c7086'}}>{t.agent}</div>
-              <div style={{width:'90px',flexShrink:0}}/>
+              <div style={{width:'90px',flexShrink:0}}></div>
             </div>
           ))}
         </div>
