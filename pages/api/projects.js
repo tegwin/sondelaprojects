@@ -37,6 +37,7 @@ export default async function handler(req, res) {
           done_tasks:    done,
           pct_complete:  pct,
           hours_logged:  p.projecttimeactual || 0,
+          budget_hours:  p.budgets?.[0]?.hours || null,
         };
       });
 

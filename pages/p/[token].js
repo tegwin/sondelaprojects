@@ -182,33 +182,7 @@ export default function ProjectPage() {
               </div>
             </div>
 
-            {/* Next session + burn rate banner */}
-            {(data.nextSession || data.burnRate) && (
-              <div style={s.infoBanner} className="print-section">
-                {data.nextSession && (
-                  <div style={s.bannerItem}>
-                    <div style={{fontSize:'0.7em',color:'#6c7086',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:'3px'}}>Next Session</div>
-                    <div style={{fontSize:'0.88em',color:'#cdd6f4',fontWeight:600}}>{data.nextSession.summary}</div>
-                    <div style={{fontSize:'0.78em',color:colour,marginTop:'2px'}}>📅 {data.nextSession.startdate}</div>
-                  </div>
-                )}
-                {data.burnRate && (
-                  <div style={{...s.bannerItem, borderLeft:'1px solid #313244', paddingLeft:'16px'}}>
-                    <div style={{fontSize:'0.7em',color:'#6c7086',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:'3px'}}>Burn Rate</div>
-                    <div style={{fontSize:'0.88em',color:'#cdd6f4',fontWeight:600}}>~{data.burnRate.hrsPerTask}h per task</div>
-                    <div style={{
-                      fontSize:'0.78em',
-                      color: data.burnRate.onBudget === false ? '#f38ba8' : '#a6e3a1',
-                      marginTop:'2px'
-                    }}>
-                      Projected: {data.burnRate.projectedTotal}h
-                      {data.burnRate.budgetHours ? ` of ${data.burnRate.budgetHours}h budget` : ''}
-                      {data.burnRate.onBudget === false ? ' ⚠️ Over budget' : data.burnRate.onBudget ? ' ✅' : ''}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+
 
             {/* Stats */}
             <div style={s.stats} className="print-section">
@@ -340,7 +314,7 @@ export default function ProjectPage() {
                 </div>
                 <div style={s.infoGrid}>
                   {[
-                    {l:'Assigned to', v:selected.agent},
+                    {l:'Assigned to', v:selected.agent&&selected.agent!=='Unassigned'?'Assigned':'Unassigned'},
                     {l:'Start date',  v:selected.startdate||'—'},
                     {l:'Target date', v:selected.targetdate||'—'},
                     {l:'Time logged', v:`${selected.hoursLogged.toFixed(1)}h`},
@@ -402,21 +376,23 @@ function ScheduleView({ data, selected, setSelected, colour, hideCompleted, coll
 
   return (
     <div style={sv.wrap}>
-      <div style={{...sv.tableHead, justifyContent:'space-between'}}>
-        <div style={{display:'flex',gap:'0',flex:1}}>
-          <div style={{...sv.col, width:'130px'}}>Status</div>
-          <div style={{...sv.col, flex:1}}>Summary</div>
-          <div style={{...sv.col, width:'100px'}}>Start</div>
-          <div style={{...sv.col, width:'100px'}}>Target</div>
-          <div style={{...sv.col, width:'80px'}}>Time</div>
-          <div style={{...sv.col, width:'90px'}}>Updated</div>
-          <div style={{...sv.col, width:'150px'}}>Agent</div>
-          <div style={{...sv.col, width:'80px'}}>Budget</div>
-        </div>
+      {/* Collapse All button row - separate from column headers */}
+      <div style={{display:'flex',justifyContent:'flex-end',padding:'6px 16px',background:'#181825',borderBottom:'1px solid #45475a'}}>
         <button onClick={allCollapsed?expandAll:collapseAll}
-          style={{background:'#313244',border:'1px solid #45475a',color:'#a6adc8',borderRadius:'6px',padding:'4px 12px',fontSize:'0.75em',cursor:'pointer',whiteSpace:'nowrap',marginLeft:'12px',flexShrink:0}}>
+          style={{background:'#313244',border:'1px solid #45475a',color:'#a6adc8',borderRadius:'6px',padding:'4px 12px',fontSize:'0.75em',cursor:'pointer',whiteSpace:'nowrap'}}>
           {allCollapsed?'▶ Expand All':'▼ Collapse All'}
         </button>
+      </div>
+      {/* Column headers - full width, no competing elements */}
+      <div style={sv.tableHead}>
+        <div style={{...sv.col, width:'130px'}}>Status</div>
+        <div style={{...sv.col, flex:1}}>Summary</div>
+        <div style={{...sv.col, width:'100px'}}>Start</div>
+        <div style={{...sv.col, width:'100px'}}>Target</div>
+        <div style={{...sv.col, width:'80px'}}>Time</div>
+        <div style={{...sv.col, width:'90px'}}>Updated</div>
+        <div style={{...sv.col, width:'150px'}}>Agent</div>
+        <div style={{...sv.col, width:'80px'}}>Budget</div>
       </div>
 
       {Object.values(tasksByMilestone).map(({ milestone: ms, tasks }) => {
@@ -462,7 +438,7 @@ function ScheduleView({ data, selected, setSelected, colour, hideCompleted, coll
                     {t.hoursLogged>0?`${t.hoursLogged.toFixed(1)}h`:'—'}
                   </div>
                   <div style={{width:'90px',flexShrink:0,fontSize:'0.7em',color:'#45475a'}}>{t.lastUpdated||'—'}</div>
-                  <div style={{width:'150px',flexShrink:0,fontSize:'0.75em',color:'#6c7086',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.agent}</div>
+                  <div style={{width:'150px',flexShrink:0,fontSize:'0.75em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:t.agent&&t.agent!=='Unassigned'?'#a6adc8':'#45475a'}}>{t.agent&&t.agent!=='Unassigned'?'Assigned':'Unassigned'}</div>
                   <div style={{width:'80px',flexShrink:0}}>
                     <div style={sv.budgetTrack}><div style={{...sv.budgetBar,width:`${pct}%`,background:colour}}></div></div>
                     <div style={{fontSize:'0.65em',color:'#6c7086',textAlign:'center',marginTop:'2px'}}>{pct}%</div>
@@ -492,7 +468,7 @@ function ScheduleView({ data, selected, setSelected, colour, hideCompleted, coll
               <div style={{width:'100px',flexShrink:0,fontSize:'0.78em',color:'#a6adc8'}}>{t.targetdate||'—'}</div>
               <div style={{width:'80px',flexShrink:0,fontSize:'0.78em',color:'#fab387',textAlign:'center'}}>{t.hoursLogged>0?`${t.hoursLogged.toFixed(1)}h`:'—'}</div>
               <div style={{width:'90px',flexShrink:0,fontSize:'0.7em',color:'#45475a'}}>{t.lastUpdated||'—'}</div>
-              <div style={{width:'150px',flexShrink:0,fontSize:'0.75em',color:'#6c7086'}}>{t.agent}</div>
+              <div style={{width:'150px',flexShrink:0,fontSize:'0.75em',color:t.agent&&t.agent!=='Unassigned'?'#a6adc8':'#45475a'}}>{t.agent&&t.agent!=='Unassigned'?'Assigned':'Unassigned'}</div>
               <div style={{width:'80px',flexShrink:0}}></div>
             </div>
           ))}
@@ -532,7 +508,7 @@ function KanbanView({ data, selected, setSelected, colour, hideCompleted }) {
                     <div style={kv.cardTitle}>{t.summary}</div>
                     {isOverdue&&<div style={{fontSize:'0.7em',color:'#f38ba8',marginBottom:'6px'}}>⚠️ Overdue · {t.targetdate}</div>}
                     <div style={kv.cardFoot}>
-                      <span style={kv.cardAgent}>{t.agent}</span>
+                      <span style={{...kv.cardAgent,color:t.agent&&t.agent!=='Unassigned'?'#a6adc8':'#45475a'}}>{t.agent&&t.agent!=='Unassigned'?'Assigned':'Unassigned'}</span>
                       <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
                         {t.hoursLogged>0&&<span style={{fontSize:'0.68em',color:'#fab387'}}>⏱{t.hoursLogged.toFixed(1)}h</span>}
                         {t.actions.length>0&&<span style={{fontSize:'0.68em',color:colour}}>💬{t.actions.length}</span>}
@@ -567,8 +543,6 @@ const s = {
   meta:        {fontSize:'0.82em',color:'#6c7086',margin:0},
   emailBtn:    {background:'#313244',color:'#cdd6f4',border:'1px solid #45475a',borderRadius:'8px',padding:'9px 14px',fontSize:'0.85em',cursor:'pointer',whiteSpace:'nowrap'},
   refreshBtn:  {background:'#313244',color:'#cdd6f4',border:'1px solid #45475a',borderRadius:'8px',padding:'9px 18px',fontSize:'0.85em',cursor:'pointer',whiteSpace:'nowrap'},
-  infoBanner:  {display:'flex',gap:'16px',background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'14px 20px',marginBottom:'16px',flexWrap:'wrap'},
-  bannerItem:  {display:'flex',flexDirection:'column',gap:'2px',flex:1,minWidth:'200px'},
   stats:       {display:'flex',gap:'10px',marginBottom:'16px',flexWrap:'wrap'},
   stat:        {background:'#313244',border:'1px solid #45475a',borderRadius:'10px',padding:'12px 16px',flex:1,minWidth:'90px'},
   statV:       {fontSize:'1.5em',fontWeight:700,color:'#cdd6f4'},

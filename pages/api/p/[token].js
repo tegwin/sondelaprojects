@@ -1,6 +1,6 @@
 import { haloFetch } from '../../../lib/halo';
 import { verifyProject } from '../../../lib/token';
-import { isLinkValid, recordView } from '../../../lib/redis';
+import { isLinkValid, recordView, getNextSessionOverride } from '../../../lib/redis';
 import { notifyFirstView } from '../../../lib/notify';
 
 const CLOSED = [9, 16, 21];
@@ -177,7 +177,11 @@ export default async function handler(req, res) {
     // Derived data
     const rag       = calcRAG(tasks);
     const burnRate  = calcBurnRate(tasks, hoursLogged, budget?.hours || null);
-    const nextSession = findNextSession(tasks);
+    const autoNext  = findNextSession(tasks);
+    const override  = await getNextSessionOverride(projectId);
+    const nextSession = override
+      ? { ...override, isManual: true }
+      : autoNext ? { ...autoNext, isManual: false } : null;
 
     // Project date range
     const allStarts  = tasks.map(t => fmtDate(t.startdate)).filter(Boolean).sort();

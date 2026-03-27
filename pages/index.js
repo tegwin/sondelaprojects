@@ -256,6 +256,21 @@ function ProjectCard({ p, copied, onCopy, onEmail, onLinkMgr, shareUrl, statusCo
         <span style={s.taskLabel}>{p.done_tasks}/{p.total_tasks} tasks</span>
         {p.hours_logged > 0 && <span style={s.hoursLabel}>⏱ {p.hours_logged.toFixed(1)}h</span>}
       </div>
+      {/* Burn rate - admin only */}
+      {p.done_tasks > 0 && p.hours_logged > 0 && (() => {
+        const hpt = p.hours_logged / p.done_tasks;
+        const projected = p.hours_logged + hpt * (p.total_tasks - p.done_tasks);
+        const over = p.total_tasks > 0 && projected > (p.budget_hours || Infinity);
+        return (
+          <div style={{padding:'0 16px 6px',fontSize:'0.72em',color:'#6c7086',display:'flex',gap:'8px',alignItems:'center'}}>
+            <span>🔥 ~{hpt.toFixed(1)}h/task</span>
+            <span style={{color: over ? '#f38ba8' : '#a6adc8'}}>
+              projected {projected.toFixed(1)}h{p.budget_hours ? ` of ${p.budget_hours}h` : ''}
+              {over ? ' ⚠️' : ''}
+            </span>
+          </div>
+        );
+      })()}
 
       <div style={s.cardActions}>
         <a href={viewUrl} target="_blank" rel="noreferrer" style={s.btnView}>
@@ -366,17 +381,36 @@ function LinkMgrModal({ project, initialMeta, onClose }) {
   const [expiresAt, setExpiresAt] = useState(initialMeta.expiresAt ? initialMeta.expiresAt.substring(0,10) : '');
   const [saving,    setSaving]    = useState(false);
   const [saved,     setSaved]     = useState(false);
+  const [nsLabel,   setNsLabel]   = useState('');
+  const [nsDate,    setNsDate]    = useState('');
+  const [nsNotes,   setNsNotes]   = useState('');
+  const [nsLoaded,  setNsLoaded]  = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/admin/nextsession/${project.token}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.override) {
+          setNsLabel(d.override.summary || '');
+          setNsDate(d.override.startdate || '');
+          setNsNotes(d.override.notes || '');
+        }
+        setNsLoaded(true);
+      });
+  }, [project.token]);
 
   async function save() {
     setSaving(true);
-    await fetch(`/api/admin/link/${project.token}`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        revoked,
-        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+    await Promise.all([
+      fetch(`/api/admin/link/${project.token}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revoked, expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null }),
       }),
-    });
+      fetch(`/api/admin/nextsession/${project.token}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: nsLabel, date: nsDate, notes: nsNotes }),
+      }),
+    ]);
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -480,6 +514,32 @@ function LinkMgrModal({ project, initialMeta, onClose }) {
           {isExpired && (
             <div style={{fontSize:'0.75em',color:'#f38ba8',marginTop:'6px'}}>⚠️ This date is in the past — link is already expired</div>
           )}
+        </div>
+
+        {/* Next Session */}
+        <div style={{background:'#1e1e2e',borderRadius:'10px',padding:'16px',marginBottom:'14px'}}>
+          <div style={{fontSize:'0.88em',color:'#cdd6f4',fontWeight:600,marginBottom:'3px'}}>Next Session</div>
+          <div style={{fontSize:'0.76em',color:'#6c7086',marginBottom:'10px'}}>
+            Shown on the client portal. Overrides the auto-detected date from HaloPSA.
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+            <input placeholder="Session label e.g. Session 05 – Billing Templates"
+              value={nsLabel} onChange={e=>setNsLabel(e.target.value)}
+              style={{background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'8px 12px',color:'#cdd6f4',fontSize:'0.85em',width:'100%',boxSizing:'border-box'}}/>
+            <div style={{display:'flex',gap:'8px'}}>
+              <input type="date" value={nsDate} onChange={e=>setNsDate(e.target.value)}
+                style={{flex:1,background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'8px 12px',color:'#cdd6f4',fontSize:'0.85em'}}/>
+              {(nsLabel||nsDate) && (
+                <button onClick={()=>{setNsLabel('');setNsDate('');setNsNotes('');}}
+                  style={{background:'#45475a',border:'none',color:'#cdd6f4',borderRadius:'6px',padding:'8px 12px',cursor:'pointer',fontSize:'0.82em',whiteSpace:'nowrap'}}>
+                  Clear
+                </button>
+              )}
+            </div>
+            <input placeholder="Optional notes (shown to client)"
+              value={nsNotes} onChange={e=>setNsNotes(e.target.value)}
+              style={{background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'8px 12px',color:'#cdd6f4',fontSize:'0.82em',width:'100%',boxSizing:'border-box'}}/>
+          </div>
         </div>
 
         {/* Share URL preview */}
