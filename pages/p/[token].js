@@ -25,6 +25,7 @@ export default function ProjectPage() {
   const [view, setView]         = useState('gantt');   // 'gantt' | 'schedule' | 'kanban'
   const [selected, setSelected]   = useState(null);
   const [hideCompleted, setHideCompleted] = useState(false);
+  const [pctMode, setPctMode] = useState('tasks'); // 'tasks' | 'hours'
   const [collapsed, setCollapsed] = useState({});
 
   function toggleCollapse(name) {
@@ -73,9 +74,16 @@ export default function ProjectPage() {
     setTimeout(render, 150);
   }, [data, view]);
 
-  const colour  = data?.project?.client_colour || '#89b4fa';
-  const pct     = data?.stats?.pctComplete || 0;
-  const title   = data ? `${data.project.client_name} — ${data.project.summary}` : 'Loading...';
+  const colour    = data?.project?.client_colour || '#89b4fa';
+  const pctTasks  = data?.stats?.pctComplete || 0;
+  const pctHours  = data?.stats?.budgetHours
+    ? Math.round((data.stats.hoursLogged / data.stats.budgetHours) * 100)
+    : null;
+  const pct       = pctMode === 'hours' && pctHours !== null ? pctHours : pctTasks;
+  const pctLabel  = pctMode === 'hours' && pctHours !== null
+    ? `${pctHours}% of budget used (${data?.stats?.hoursLogged?.toFixed(1)}h of ${data?.stats?.budgetHours}h)`
+    : `${pctTasks}% of tasks complete (${data?.stats?.done} of ${data?.stats?.total})`;
+  const title     = data ? `${data.project.client_name} — ${data.project.summary}` : 'Loading...';
 
   return (
     <>
@@ -166,16 +174,29 @@ export default function ProjectPage() {
             </div>
 
             {/* Progress bar */}
-            <div style={{marginBottom:'16px'}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px'}}>
-                <span style={{fontSize:'0.78em',color:'#a6adc8',fontWeight:600}}>Overall Progress</span>
-                <span style={{fontSize:'0.82em',fontWeight:700,color:'#a6e3a1'}}>{pct}% complete</span>
+            <div style={{marginBottom:'16px'}}> 
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px',flexWrap:'wrap',gap:'8px'}}>
+                <span style={{fontSize:'0.78em',color:'#a6adc8',fontWeight:600}}>{pctLabel}</span>
+                <div style={{display:'flex',background:'#1e1e2e',borderRadius:'6px',padding:'2px',gap:'2px'}}>
+                  <button onClick={()=>setPctMode('tasks')}
+                    style={{background:pctMode==='tasks'?'#313244':'transparent',border:'none',color:pctMode==='tasks'?'#cdd6f4':'#6c7086',borderRadius:'4px',padding:'3px 10px',fontSize:'0.72em',cursor:'pointer',fontWeight:pctMode==='tasks'?700:400}}>
+                    By Tasks
+                  </button>
+                  {pctHours!==null&&(
+                    <button onClick={()=>setPctMode('hours')}
+                      style={{background:pctMode==='hours'?'#313244':'transparent',border:'none',color:pctMode==='hours'?'#fab387':'#6c7086',borderRadius:'4px',padding:'3px 10px',fontSize:'0.72em',cursor:'pointer',fontWeight:pctMode==='hours'?700:400}}>
+                      By Hours
+                    </button>
+                  )}
+                </div>
               </div>
               <div style={{height:'18px',background:'#1e1e2e',borderRadius:'9px',overflow:'hidden',border:'1px solid #313244'}}>
                 <div style={{
                   height:'100%',
-                  width:`${pct}%`,
-                  background:'linear-gradient(90deg, #40a060, #a6e3a1)',
+                  width:`${Math.min(pct,100)}%`,
+                  background: pctMode==='hours'
+                    ? 'linear-gradient(90deg, #a06040, #fab387)'
+                    : 'linear-gradient(90deg, #40a060, #a6e3a1)',
                   borderRadius:'9px',
                   transition:'width 0.6s ease',
                   display:'flex',
