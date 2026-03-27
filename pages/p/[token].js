@@ -325,17 +325,30 @@ function ScheduleView({ data, selected, setSelected, colour, hideCompleted, coll
 
   const totalH = data.stats.budgetHours || 0;
 
+  const allNames = [...Object.keys(tasksByMilestone), ...(other.length > 0 ? ['__other__'] : [])];
+  const allCollapsed = allNames.every(n => collapsed[n]);
+
+  function collapseAll() { allNames.forEach(n => { if (!collapsed[n]) toggleCollapse(n); }); }
+  function expandAll()   { allNames.forEach(n => { if (collapsed[n])  toggleCollapse(n); }); }
+
   return (
     <div style={sv.wrap}>
       {/* Table header */}
-      <div style={sv.tableHead}>
-        <div style={{...sv.col, width:'140px'}}>Status</div>
-        <div style={{...sv.col, flex:1}}>Summary</div>
-        <div style={{...sv.col, width:'100px'}}>Start Date</div>
-        <div style={{...sv.col, width:'100px'}}>Target Date</div>
-        <div style={{...sv.col, width:'80px'}}>Time Taken</div>
-        <div style={{...sv.col, width:'160px'}}>Agent</div>
-        <div style={{...sv.col, width:'90px'}}>Budget %</div>
+      <div style={{...sv.tableHead, justifyContent:'space-between'}}>
+        <div style={{display:'flex',gap:'0',flex:1}}>
+          <div style={{...sv.col, width:'140px'}}>Status</div>
+          <div style={{...sv.col, flex:1}}>Summary</div>
+          <div style={{...sv.col, width:'100px'}}>Start Date</div>
+          <div style={{...sv.col, width:'100px'}}>Target Date</div>
+          <div style={{...sv.col, width:'80px'}}>Time Taken</div>
+          <div style={{...sv.col, width:'160px'}}>Agent</div>
+          <div style={{...sv.col, width:'90px'}}>Budget %</div>
+        </div>
+        <button
+          onClick={allCollapsed ? expandAll : collapseAll}
+          style={{background:'#313244',border:'1px solid #45475a',color:'#a6adc8',borderRadius:'6px',padding:'4px 12px',fontSize:'0.75em',cursor:'pointer',whiteSpace:'nowrap',marginLeft:'12px',flexShrink:0}}>
+          {allCollapsed ? '▶ Expand All' : '▼ Collapse All'}
+        </button>
       </div>
 
       {Object.values(tasksByMilestone).map(({ milestone: ms, tasks }) => {
