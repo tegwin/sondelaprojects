@@ -38,13 +38,23 @@ export default function ProjectPage() {
   const [error, setError]       = useState(null);
   const [loading, setLoading]   = useState(true);
   const [lastFetch, setLastFetch] = useState(null);
-  const [view, setView]         = useState('gantt');
+  const [view, setView]         = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sondela_view') || 'gantt';
+    }
+    return 'gantt';
+  });
   const [selected, setSelected] = useState(null);
   const [hideCompleted, setHideCompleted] = useState(false);
   const [collapsed, setCollapsed] = useState({});
   const [pctMode, setPctMode]   = useState('hours');
 
   function toggleCollapse(name) { setCollapsed(p => ({...p, [name]: !p[name]})); }
+
+  function switchView(v) {
+    setView(v);
+    if (typeof window !== 'undefined') localStorage.setItem('sondela_view', v);
+  }
 
   const ganttRef     = useRef(null);
   const mermaidReady = useRef(false);
@@ -235,7 +245,7 @@ export default function ProjectPage() {
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px',flexWrap:'wrap',gap:'10px'}} className="no-print">
               <div style={s.viewSwitcher}>
                 {['gantt','schedule','kanban'].map(v=>(
-                  <button key={v} onClick={()=>setView(v)}
+                  <button key={v} onClick={()=>switchView(v)}
                     style={{...s.viewBtn,...(view===v?{...s.viewBtnActive,borderBottomColor:colour,color:colour}:{})}}>
                     {v==='gantt'?'📊 Gantt':v==='schedule'?'📋 Schedule':'🗂 Kanban'}
                   </button>
