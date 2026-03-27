@@ -25,7 +25,7 @@ export default function ProjectPage() {
   const [view, setView]         = useState('gantt');   // 'gantt' | 'schedule' | 'kanban'
   const [selected, setSelected]   = useState(null);
   const [hideCompleted, setHideCompleted] = useState(false);
-  const [pctMode, setPctMode] = useState('tasks'); // 'tasks' | 'hours'
+  const [pctMode, setPctMode] = useState('hours'); // 'tasks' | 'hours'
   const [collapsed, setCollapsed] = useState({});
 
   function toggleCollapse(name) {
