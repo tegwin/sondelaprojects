@@ -343,28 +343,42 @@ function LinkMgrModal({ project, initialMeta, onClose }) {
            '✅ Link is active — clients can access this project'}
         </div>
 
-        {/* Revoke toggle */}
+        {/* Revoke / Re-enable */}
         <div style={{background:'#1e1e2e',borderRadius:'10px',padding:'16px',marginBottom:'14px'}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'12px'}}>
             <div>
-              <div style={{fontSize:'0.88em',color:'#cdd6f4',fontWeight:600,marginBottom:'3px'}}>Revoke Access</div>
-              <div style={{fontSize:'0.76em',color:'#6c7086'}}>Immediately block all access to this project link</div>
+              <div style={{fontSize:'0.88em',color:'#cdd6f4',fontWeight:600,marginBottom:'3px'}}>
+                {revoked ? '🔒 Link is Revoked' : 'Revoke Access'}
+              </div>
+              <div style={{fontSize:'0.76em',color:'#6c7086'}}>
+                {revoked
+                  ? 'The client cannot currently access this project. Re-enable to restore access.'
+                  : 'Immediately block all access to this project link.'}
+              </div>
             </div>
-            <button
-              onClick={() => setRevoked(r => !r)}
-              style={{
-                background: revoked ? '#f38ba8' : '#313244',
-                color:      revoked ? '#1e1e2e' : '#cdd6f4',
-                border:     revoked ? 'none' : '1px solid #45475a',
-                borderRadius: '8px',
-                padding:    '8px 16px',
-                cursor:     'pointer',
-                fontWeight: 700,
-                fontSize:   '0.82em',
-                minWidth:   '100px',
-              }}>
-              {revoked ? '🔒 Revoked' : 'Revoke'}
-            </button>
+            <div style={{display:'flex',gap:'8px',flexShrink:0}}>
+              {revoked ? (
+                <button
+                  onClick={() => { setRevoked(false); setExpiresAt(''); }}
+                  style={{
+                    background:'#a6e3a1',color:'#1e1e2e',border:'none',
+                    borderRadius:'8px',padding:'8px 16px',cursor:'pointer',
+                    fontWeight:700,fontSize:'0.82em',minWidth:'120px',
+                  }}>
+                  ✅ Re-enable Link
+                </button>
+              ) : (
+                <button
+                  onClick={() => setRevoked(true)}
+                  style={{
+                    background:'#313244',color:'#f38ba8',border:'1px solid #f38ba850',
+                    borderRadius:'8px',padding:'8px 16px',cursor:'pointer',
+                    fontWeight:700,fontSize:'0.82em',minWidth:'100px',
+                  }}>
+                  🔒 Revoke
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
