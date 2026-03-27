@@ -1,5 +1,5 @@
-import { getLinkMeta, setLinkMeta } from '../../../lib/redis';
-import { verifyProject } from '../../../lib/token';
+import { getLinkMeta, setLinkMeta } from '../../../../lib/redis';
+import { verifyProject } from '../../../../lib/token';
 
 export default async function handler(req, res) {
   const { token } = req.query;
