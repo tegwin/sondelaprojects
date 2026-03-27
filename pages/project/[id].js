@@ -177,7 +177,7 @@ export default function ProjectPage() {
                     >
                       <div style={s.taskTop}>
                         <span style={{...s.pill,...statusStyle(t.status_id)}}>{t.status}</span>
-                        {t.actions.length>0&&<span style={s.notesBadge}>💬 {t.actions.length}</span>}
+                        {t.notes.length>0&&<span style={s.notesBadge}>💬 {t.notes.length}</span>}
                       </div>
                       <div style={s.taskName}>{t.summary}</div>
                       <div style={s.taskMeta}>
@@ -230,15 +230,15 @@ export default function ProjectPage() {
 
                 {/* Actions / notes */}
                 <div style={s.blockLbl}>Updates &amp; Notes</div>
-                {selected.actions.length>0 ? selected.actions.map(a=>(
+                {selected.notes.length>0 ? selected.notes.map(a=>(
                   <div key={a.id} style={s.actionCard}>
                     <div style={s.actionMeta}>
-                      <span style={{fontWeight:600,color:'#89b4fa'}}>{a.who}</span>
+                      <span style={{fontWeight:600,color:"#89b4fa"}}>{a.label && <span style={{fontSize:"0.78em",color:"#fab387",marginRight:"6px"}}>[{a.label}]</span>}{a.who}</span>
                       {a.date&&<span style={{color:'#6c7086'}}>{a.date}</span>}
                       {a.timetaken>0&&<span style={{color:'#fab387'}}>⏱ {a.timetaken.toFixed(1)}h</span>}
                       {a.outcome&&<span style={{color:'#a6adc8',fontStyle:'italic'}}>{a.outcome}</span>}
                     </div>
-                    <div style={s.actionBody} dangerouslySetInnerHTML={{__html:a.note}}/>
+                    <div style={s.actionBody} dangerouslySetInnerHTML={{__html:a.html}}/>
                   </div>
                 )) : (
                   <div style={s.noNotes}>No public notes on this task yet.</div>
