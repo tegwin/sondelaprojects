@@ -50,10 +50,7 @@ export default function ProjectPage() {
   const [hideCompleted, setHideCompleted] = useState(false);
   const [collapsed, setCollapsed]     = useState({});
   const [pctMode, setPctMode]         = useState('hours');
-  const [activeTab, setActiveTab] = useState(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('sondela_tab') || 'gantt';
-    return 'gantt';
-  });
+  const [activeTab, setActiveTab] = useState('gantt');
   function switchTab(t) {
     setActiveTab(t);
     if (typeof window !== 'undefined') localStorage.setItem('sondela_tab', t);
@@ -101,6 +98,11 @@ export default function ProjectPage() {
       if (json.error) throw new Error(`${json.error}||${json.reason||''}`);
       setData(json);
       setLastFetch(new Date());
+      // Restore tab preference after data is ready
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('sondela_tab');
+        if (saved) setActiveTab(saved);
+      }
     } catch (e) { setError(e.message); }
     finally     { setLoading(false); }
   }
@@ -113,20 +115,38 @@ export default function ProjectPage() {
     setScratchLoaded(true);
   }
 
+  const [scratchError, setScratchError] = useState(null);
+  const [editingId, setEditingId]       = useState(null);
+  const [editText, setEditText]         = useState('');
+
   async function scratchAction(action, item) {
-    const res = await fetch(`/api/p/scratchpad?token=${query.token}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, item }),
-    });
-    const d = await res.json();
-    setScratchpad(d.items || []);
+    setScratchError(null);
+    try {
+      const res = await fetch(`/api/p/scratchpad?token=${query.token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, item }),
+      });
+      if (!res.ok) { setScratchError(`Server error ${res.status}`); return; }
+      const d = await res.json();
+      if (d.error) { setScratchError(d.error); return; }
+      setScratchpad(d.items || []);
+    } catch (e) {
+      setScratchError('Failed to save — check your connection');
+    }
   }
 
   async function addScratchItem() {
     if (!newItem.trim()) return;
     await scratchAction('add', { text: newItem, type: newItemType, author: 'client' });
     setNewItem('');
+  }
+
+  async function saveEdit(id) {
+    if (!editText.trim()) return;
+    await scratchAction('edit', { id, text: editText });
+    setEditingId(null);
+    setEditText('');
   }
 
   async function submitNote() {
@@ -518,21 +538,39 @@ export default function ProjectPage() {
                       </button>
                     </div>
                   </div>
+                  {scratchError && <div style={{background:'#2e1e1e',border:'1px solid #f38ba8',borderRadius:'6px',padding:'8px 12px',fontSize:'0.8em',color:'#f38ba8',marginBottom:'10px'}}>⚠️ {scratchError}</div>}
                   {scratchpad.length===0&&<div style={{color:'#45475a',fontSize:'0.85em',fontStyle:'italic',textAlign:'center',padding:'20px'}}>Nothing here yet — add your first item above</div>}
                   {scratchpad.map(item=>(
-                    <div key={item.id} style={{display:'flex',alignItems:'flex-start',gap:'10px',padding:'10px 12px',background:item.done?'#1a1a2a':'#1e1e2e',borderRadius:'8px',marginBottom:'6px',opacity:item.done?0.6:1}}>
-                      {item.type==='todo'?(
-                        <button onClick={()=>scratchAction('toggle',{id:item.id})}
-                          style={{background:'none',border:'none',cursor:'pointer',fontSize:'1.1em',padding:'0',flexShrink:0,marginTop:'1px'}}>
-                          {item.done?'☑':'☐'}
-                        </button>
-                      ):<span style={{fontSize:'0.9em',flexShrink:0,marginTop:'2px'}}>📝</span>}
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:'0.85em',color:'#cdd6f4',textDecoration:item.done?'line-through':'none',lineHeight:1.4}}>{item.text}</div>
-                        <div style={{fontSize:'0.7em',color:'#45475a',marginTop:'3px'}}>{item.author==='admin'?'Consultant':'Client'} · {item.ts}</div>
-                      </div>
-                      <button onClick={()=>scratchAction('delete',{id:item.id})}
-                        style={{background:'none',border:'none',color:'#45475a',cursor:'pointer',fontSize:'1em',padding:'0',flexShrink:0}}>×</button>
+                    <div key={item.id} style={{padding:'10px 12px',background:item.done?'#1a1a2a':'#1e1e2e',borderRadius:'8px',marginBottom:'6px',opacity:item.done?0.6:1}}>
+                      {editingId===item.id ? (
+                        <div style={{display:'flex',gap:'6px'}}>
+                          <textarea value={editText} onChange={e=>setEditText(e.target.value)} rows={2}
+                            style={{flex:1,background:'#313244',border:'1px solid #89b4fa',borderRadius:'6px',padding:'6px 8px',color:'#cdd6f4',fontSize:'0.85em',resize:'vertical',fontFamily:'inherit'}}/>
+                          <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
+                            <button onClick={()=>saveEdit(item.id)} style={{background:'#89b4fa',border:'none',color:'#1e1e2e',borderRadius:'4px',padding:'4px 8px',fontSize:'0.75em',cursor:'pointer',fontWeight:700}}>Save</button>
+                            <button onClick={()=>{setEditingId(null);setEditText('');}} style={{background:'#45475a',border:'none',color:'#cdd6f4',borderRadius:'4px',padding:'4px 8px',fontSize:'0.75em',cursor:'pointer'}}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{display:'flex',alignItems:'flex-start',gap:'10px'}}>
+                          {item.type==='todo'?(
+                            <button onClick={()=>scratchAction('toggle',{id:item.id})}
+                              style={{background:'none',border:'none',cursor:'pointer',fontSize:'1.1em',padding:'0',flexShrink:0,marginTop:'2px'}}>
+                              {item.done?'☑':'☐'}
+                            </button>
+                          ):<span style={{fontSize:'0.9em',flexShrink:0,marginTop:'2px'}}>📝</span>}
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:'0.85em',color:'#cdd6f4',textDecoration:item.done?'line-through':'none',lineHeight:1.4,whiteSpace:'pre-wrap'}}>{item.text}</div>
+                            <div style={{fontSize:'0.7em',color:'#45475a',marginTop:'3px'}}>{item.author==='admin'?'Consultant':'Client'} · {item.ts}</div>
+                          </div>
+                          <div style={{display:'flex',gap:'4px',flexShrink:0}}>
+                            <button onClick={()=>{setEditingId(item.id);setEditText(item.text);}}
+                              style={{background:'none',border:'none',color:'#6c7086',cursor:'pointer',fontSize:'0.8em',padding:'2px 4px'}}>✏️</button>
+                            <button onClick={()=>scratchAction('delete',{id:item.id})}
+                              style={{background:'none',border:'none',color:'#45475a',cursor:'pointer',fontSize:'1em',padding:'2px 4px'}}>×</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
