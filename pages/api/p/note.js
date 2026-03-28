@@ -18,16 +18,16 @@ export default async function handler(req, res) {
   const formattedNote = `📋 Client note from ${authorName || 'Client'} (via Project Portal):\n\n${note.trim()}`;
 
   try {
-    // HaloPSA Actions API expects an array
     await haloFetch('/api/Actions', {
       method: 'POST',
       body: JSON.stringify([{
-        ticket_id:        parseInt(ticketId),
-        note:             formattedNote,
-        hiddenfromuser:   false,
-        outcome:          'note',
-        who_type:         3,
+        ticket_id:         parseInt(ticketId),
+        note:              formattedNote,
+        hiddenfromuser:    false,
+        outcome:           'note',
+        who_type:          3,           // end user / customer
         actionby_agent_id: 0,
+        new_status_id:     1,           // sets ticket to "New" / Customer Updated
       }]),
     });
     return res.status(200).json({ ok: true });
