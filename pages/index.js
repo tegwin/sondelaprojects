@@ -134,6 +134,7 @@ export default function Home() {
         </header>
 
         <main style={s.main}>
+          {page === 'projects' && <>
           {/* Controls row */}
           <div style={s.controls}>
             <input
@@ -185,6 +186,9 @@ export default function Home() {
           )}
         </main>
       </div>
+
+          </>
+          }
 
       {/* Health Dashboard */}
       {page === 'health' && (
@@ -482,7 +486,7 @@ const s = {
   clientDot:    {width:'10px',height:'10px',borderRadius:'50%',flexShrink:0},
   clientName:   {color:'#cdd6f4',fontWeight:700,fontSize:'1em',textDecoration:'none'},
   clientCount:  {color:'#6c7086',fontSize:'0.8em'},
-  grid:         {display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:'14px'},
+  grid:         {display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(420px,1fr))',gap:'14px'},
   card:         {background:'#252535',border:'1px solid #45475a',borderRadius:'12px',overflow:'hidden',display:'flex',flexDirection:'column',gap:'10px'},
   progressTrack:{height:'3px',background:'#313244',width:'100%'},
   progressBar:  {height:'3px',borderRadius:'0',transition:'width 0.3s ease'},

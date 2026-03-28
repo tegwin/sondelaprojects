@@ -50,7 +50,14 @@ export default function ProjectPage() {
   const [hideCompleted, setHideCompleted] = useState(false);
   const [collapsed, setCollapsed]     = useState({});
   const [pctMode, setPctMode]         = useState('hours');
-  const [activeTab, setActiveTab]     = useState('tasks');
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('sondela_tab') || 'gantt';
+    return 'gantt';
+  });
+  function switchTab(t) {
+    setActiveTab(t);
+    if (typeof window !== 'undefined') localStorage.setItem('sondela_tab', t);
+  }
 
   // ── Scratchpad state ────────────────────────────────────────────────────────
   const [scratchpad, setScratchpad]       = useState([]);
@@ -324,8 +331,25 @@ export default function ProjectPage() {
               </div>
             </div>
 
-            {/* View switcher */}
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px',flexWrap:'wrap',gap:'10px'}} className="no-print">
+            {/* Top-level tab bar */}
+            <div style={{display:'flex',gap:'0',background:'#181825',borderRadius:'10px',padding:'4px',width:'100%',marginBottom:'16px',flexWrap:'wrap'}} className="no-print">
+              <button onClick={()=>switchTab('gantt')} style={{...s.viewBtn,...(activeTab==='gantt'?{...s.viewBtnActive,borderBottomColor:colour,color:colour}:{})}}>
+                📊 Project
+              </button>
+              <button onClick={()=>{switchTab('scratchpad');loadScratchpad();}} style={{...s.viewBtn,...(activeTab==='scratchpad'?{...s.viewBtnActive,borderBottomColor:'#89b4fa',color:'#89b4fa'}:{})}}>
+                📝 Scratchpad
+                {scratchpad.filter(i=>!i.done&&i.type==='todo').length>0&&(
+                  <span style={{background:'#89b4fa',color:'#1e1e2e',borderRadius:'10px',padding:'1px 7px',fontSize:'0.75em',marginLeft:'4px'}}>
+                    {scratchpad.filter(i=>!i.done&&i.type==='todo').length}
+                  </span>
+                )}
+              </button>
+              <button onClick={()=>{switchTab('docs');loadDocs();}} style={{...s.viewBtn,...(activeTab==='docs'?{...s.viewBtnActive,borderBottomColor:'#89b4fa',color:'#89b4fa'}:{})}}>📁 Documents</button>
+              <button onClick={()=>switchTab('signoff')} style={{...s.viewBtn,...(activeTab==='signoff'?{...s.viewBtnActive,borderBottomColor:'#a6e3a1',color:'#a6e3a1'}:{})}}>✅ Sign-off</button>
+            </div>
+
+            {/* View switcher (only shown in Project tab) */}
+            {activeTab==='gantt'&&<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px',flexWrap:'wrap',gap:'10px'}} className="no-print">
               <div style={s.viewSwitcher}>
                 {['gantt','schedule','kanban'].map(v=>(
                   <button key={v} onClick={()=>switchView(v)}
@@ -341,10 +365,10 @@ export default function ProjectPage() {
                   Hide completed tasks
                 </label>
               )}
-            </div>
+            </div>}
 
             {/* GANTT */}
-            {view==='gantt'&&(
+            {activeTab==='gantt'&&view==='gantt'&&(
               <div style={s.mainRow}>
                 <div style={s.ganttPanel}>
                   <div style={s.panelHdr}>
@@ -383,15 +407,15 @@ export default function ProjectPage() {
               </div>
             )}
 
-            {view==='schedule'&&(
+            {activeTab==='gantt'&&view==='schedule'&&(
               <ScheduleView data={data} selected={selected} setSelected={setSelected} colour={colour} hideCompleted={hideCompleted} collapsed={collapsed} toggleCollapse={toggleCollapse}/>
             )}
-            {view==='kanban'&&(
+            {activeTab==='gantt'&&view==='kanban'&&(
               <KanbanView data={data} selected={selected} setSelected={setSelected} colour={colour} hideCompleted={hideCompleted}/>
             )}
 
             {/* Detail panel */}
-            {selected&&(
+            {activeTab==='gantt'&&selected&&(
               <div style={s.detail} className="print-section">
                 <div style={s.detailHdr}>
                   <div style={{flex:1}}>
@@ -457,20 +481,8 @@ export default function ProjectPage() {
               </div>
             )}
 
-            {/* Bottom tabs */}
+            {/* Bottom panels */}
             <div style={{marginTop:'20px'}}>
-              <div style={{display:'flex',background:'#181825',borderRadius:'10px',padding:'4px',width:'fit-content',marginBottom:'16px'}} className="no-print">
-                <button onClick={()=>setActiveTab('scratchpad')||loadScratchpad()} style={{...s.viewBtn,...(activeTab==='scratchpad'?{...s.viewBtnActive}:{})}}>
-                  📝 Scratchpad
-                  {scratchpad.filter(i=>!i.done&&i.type==='todo').length>0&&(
-                    <span style={{background:'#89b4fa',color:'#1e1e2e',borderRadius:'10px',padding:'1px 7px',fontSize:'0.75em',marginLeft:'4px'}}>
-                      {scratchpad.filter(i=>!i.done&&i.type==='todo').length}
-                    </span>
-                  )}
-                </button>
-                <button onClick={()=>{setActiveTab('docs');loadDocs();}} style={{...s.viewBtn,...(activeTab==='docs'?{...s.viewBtnActive}:{})}}>📁 Documents</button>
-                <button onClick={()=>setActiveTab('signoff')} style={{...s.viewBtn,...(activeTab==='signoff'?{...s.viewBtnActive}:{})}}>✅ Sign-off</button>
-              </div>
 
               {/* Scratchpad */}
               {activeTab==='scratchpad'&&(
@@ -483,20 +495,26 @@ export default function ProjectPage() {
                     <input placeholder="Your name (optional)" value={clientName} onChange={e=>setClientName(e.target.value)}
                       style={{background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'6px 12px',color:'#cdd6f4',fontSize:'0.8em',width:'160px'}}/>
                   </div>
-                  <div style={{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}}>
-                    <div style={{display:'flex',background:'#1e1e2e',borderRadius:'6px',padding:'2px',gap:'2px',flexShrink:0}}>
-                      <button onClick={()=>setNewItemType('todo')} style={{background:newItemType==='todo'?'#313244':'transparent',border:'none',color:newItemType==='todo'?'#cdd6f4':'#6c7086',borderRadius:'4px',padding:'5px 10px',fontSize:'0.75em',cursor:'pointer'}}>☐ To-do</button>
-                      <button onClick={()=>setNewItemType('note')} style={{background:newItemType==='note'?'#313244':'transparent',border:'none',color:newItemType==='note'?'#cdd6f4':'#6c7086',borderRadius:'4px',padding:'5px 10px',fontSize:'0.75em',cursor:'pointer'}}>📝 Note</button>
+                  <div style={{marginBottom:'16px'}}>
+                    <div style={{display:'flex',gap:'8px',marginBottom:'8px',flexWrap:'wrap',alignItems:'center'}}>
+                      <div style={{display:'flex',background:'#1e1e2e',borderRadius:'6px',padding:'2px',gap:'2px'}}>
+                        <button onClick={()=>setNewItemType('todo')} style={{background:newItemType==='todo'?'#313244':'transparent',border:'none',color:newItemType==='todo'?'#cdd6f4':'#6c7086',borderRadius:'4px',padding:'5px 10px',fontSize:'0.75em',cursor:'pointer'}}>☐ To-do</button>
+                        <button onClick={()=>setNewItemType('note')} style={{background:newItemType==='note'?'#313244':'transparent',border:'none',color:newItemType==='note'?'#cdd6f4':'#6c7086',borderRadius:'4px',padding:'5px 10px',fontSize:'0.75em',cursor:'pointer'}}>📝 Note</button>
+                      </div>
+                      <span style={{fontSize:'0.72em',color:'#45475a'}}>Press Enter to add · paste large text below</span>
                     </div>
-                    <input
-                      placeholder={newItemType==='todo'?"Add something to cover in the next session...":"Add a note or question..."}
-                      value={newItem} onChange={e=>setNewItem(e.target.value)}
-                      onKeyDown={e=>e.key==='Enter'&&addScratchItem()}
-                      style={{flex:1,minWidth:'200px',background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'8px 12px',color:'#cdd6f4',fontSize:'0.85em'}}/>
-                    <button onClick={addScratchItem} disabled={!newItem.trim()}
-                      style={{background:'#89b4fa',color:'#1e1e2e',border:'none',borderRadius:'6px',padding:'8px 16px',fontSize:'0.85em',fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>
-                      Add
-                    </button>
+                    <div style={{display:'flex',gap:'8px'}}>
+                      <textarea
+                        placeholder={newItemType==='todo'?"Add a to-do item, or paste a large block of text...":"Add a note, question, or paste meeting notes..."}
+                        value={newItem} onChange={e=>setNewItem(e.target.value)}
+                        onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&newItem.trim().length<200){e.preventDefault();addScratchItem();}}}
+                        rows={newItem.length>100?4:2}
+                        style={{flex:1,background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'8px 12px',color:'#cdd6f4',fontSize:'0.85em',resize:'vertical',fontFamily:'inherit',lineHeight:1.5}}/>
+                      <button onClick={addScratchItem} disabled={!newItem.trim()}
+                        style={{background:'#89b4fa',color:'#1e1e2e',border:'none',borderRadius:'6px',padding:'8px 16px',fontSize:'0.85em',fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',alignSelf:'flex-end'}}>
+                        Add
+                      </button>
+                    </div>
                   </div>
                   {scratchpad.length===0&&<div style={{color:'#45475a',fontSize:'0.85em',fontStyle:'italic',textAlign:'center',padding:'20px'}}>Nothing here yet — add your first item above</div>}
                   {scratchpad.map(item=>(
