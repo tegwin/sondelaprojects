@@ -246,10 +246,83 @@ export default function Home() {
               <p style={{color:'#6c7086',fontSize:'0.85em',margin:'0 0 16px'}}>Generate a formatted status report across all active projects</p>
               <button onClick={()=>{
                 const w = window.open('','_blank');
-                const rows = projects.filter(p=>p.status_id!==9).map(p=>
-                  `<tr><td>${p.client_name}</td><td>${p.summary}</td><td>${p.pct_complete}%</td><td>${p.done_tasks}/${p.total_tasks}</td><td>${p.hours_logged.toFixed(1)}h</td></tr>`
-                ).join('');
-                w.document.write(`<html><head><title>Weekly Status Report - ${new Date().toLocaleDateString('en-GB')}</title><style>body{font-family:Arial;padding:30px;max-width:900px;margin:0 auto}table{width:100%;border-collapse:collapse}th,td{padding:10px;border:1px solid #ddd;text-align:left}th{background:#1e1e2e;color:#fff}@media print{.no-print{display:none}}</style></head><body><h1>Weekly Status Report</h1><p>Generated: ${new Date().toLocaleDateString('en-GB')} by Sondela Consulting</p><button class="no-print" onclick="window.print()" style="margin-bottom:20px;padding:8px 16px;background:#1e1e2e;color:#fff;border:none;border-radius:4px;cursor:pointer">🖨 Print</button><table><thead><tr><th>Client</th><th>Project</th><th>Progress</th><th>Tasks</th><th>Hours</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+                const active = projects.filter(p => p.status_id !== 9 && p.total_tasks > 0);
+                const date = new Date().toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'});
+                const rows = active.map(p => {
+                  const pct = p.pct_complete || 0;
+                  const ragColour = pct === 100 ? '#16a34a' : pct >= 50 ? '#d97706' : '#dc2626';
+                  const ragLabel = pct === 100 ? 'Complete' : pct >= 50 ? 'In Progress' : 'Early Stage';
+                  const hrs = typeof p.hours_logged === 'number' ? p.hours_logged.toFixed(1) : '0.0';
+                  const budget = p.budget_hours ? ` / ${p.budget_hours}h` : '';
+                  const pctBar = `<div style="background:#e5e7eb;border-radius:4px;height:8px;width:100%"><div style="background:${ragColour};height:8px;border-radius:4px;width:${Math.min(pct,100)}%"></div></div><div style="font-size:11px;color:#6b7280;margin-top:2px">${pct}%</div>`;
+                  return `<tr>
+                    <td style="font-weight:600;color:#1e3a5f">${p.client_name}</td>
+                    <td>${p.summary}</td>
+                    <td>${pctBar}</td>
+                    <td style="text-align:center">${p.done_tasks}/${p.total_tasks}</td>
+                    <td style="text-align:center">${hrs}h${budget}</td>
+                    <td><span style="background:${ragColour}22;color:${ragColour};border:1px solid ${ragColour}40;border-radius:12px;padding:2px 10px;font-size:12px;font-weight:600;white-space:nowrap">${ragLabel}</span></td>
+                  </tr>`;
+                }).join('');
+                w.document.write(`<!DOCTYPE html><html><head><title>Project Status Report — ${date}</title>
+                <style>
+                  * { box-sizing: border-box; margin: 0; padding: 0; }
+                  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f8fafc; color: #1e293b; }
+                  .page { max-width: 960px; margin: 0 auto; padding: 40px 32px; }
+                  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 3px solid #89b4fa; }
+                  .brand { display: flex; align-items: center; gap: 14px; }
+                  .logo { width: 48px; height: 48px; background: #1e1e2e; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #89b4fa; font-size: 24px; font-weight: 800; }
+                  .brand-name { font-size: 20px; font-weight: 700; color: #1e1e2e; }
+                  .brand-sub { font-size: 13px; color: #64748b; margin-top: 2px; }
+                  .report-meta { text-align: right; }
+                  .report-title { font-size: 18px; font-weight: 700; color: #1e3a5f; }
+                  .report-date { font-size: 13px; color: #64748b; margin-top: 4px; }
+                  .summary { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 32px; }
+                  .summary-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 20px; }
+                  .summary-val { font-size: 28px; font-weight: 800; color: #1e3a5f; }
+                  .summary-lbl { font-size: 12px; color: #64748b; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+                  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+                  thead tr { background: #1e1e2e; }
+                  th { padding: 12px 14px; text-align: left; font-size: 12px; color: #89b4fa; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+                  td { padding: 12px 14px; font-size: 13px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+                  tr:last-child td { border-bottom: none; }
+                  tr:nth-child(even) td { background: #f8fafc; }
+                  .footer { margin-top: 32px; padding-top: 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 12px; color: #94a3b8; }
+                  .no-print { margin-bottom: 20px; }
+                  @media print { .no-print { display: none !important; } body { background: #fff; } }
+                </style></head>
+                <body><div class="page">
+                  <div class="no-print">
+                    <button onclick="window.print()" style="background:#1e1e2e;color:#89b4fa;border:none;border-radius:6px;padding:9px 20px;font-size:14px;cursor:pointer;font-weight:600;margin-right:10px">🖨 Print / Save PDF</button>
+                    <button onclick="window.close()" style="background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;border-radius:6px;padding:9px 20px;font-size:14px;cursor:pointer">Close</button>
+                  </div>
+                  <div class="header">
+                    <div class="brand">
+                      <div class="logo">S</div>
+                      <div>
+                        <div class="brand-name">Sondela Consulting</div>
+                        <div class="brand-sub">sondelaconsulting.com</div>
+                      </div>
+                    </div>
+                    <div class="report-meta">
+                      <div class="report-title">Weekly Project Status Report</div>
+                      <div class="report-date">${date}</div>
+                    </div>
+                  </div>
+                  <div class="summary">
+                    <div class="summary-card"><div class="summary-val">${active.length}</div><div class="summary-lbl">Active Projects</div></div>
+                    <div class="summary-card"><div class="summary-val">${active.filter(p=>p.pct_complete===100).length}</div><div class="summary-lbl">Complete</div></div>
+                    <div class="summary-card"><div class="summary-val">${active.reduce((a,p)=>a+(p.hours_logged||0),0).toFixed(1)}h</div><div class="summary-lbl">Total Hours Logged</div></div>
+                  </div>
+                  <table>
+                    <thead><tr><th>Client</th><th>Project</th><th>Progress</th><th style="text-align:center">Tasks</th><th style="text-align:center">Hours</th><th>Status</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                  </table>
+                  <div class="footer">
+                    <span>Generated by Sondela Consulting Project Portal</span>
+                    <span>Confidential — not for distribution</span>
+                  </div>
+                </div></body></html>`);
                 w.document.close();
               }} style={{background:'#89b4fa',color:'#1e1e2e',border:'none',borderRadius:'8px',padding:'10px 20px',fontSize:'0.88em',fontWeight:700,cursor:'pointer'}}>
                 Generate Report

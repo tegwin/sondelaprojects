@@ -51,6 +51,7 @@ export default function ProjectPage() {
   const [collapsed, setCollapsed]     = useState({});
   const [pctMode, setPctMode]         = useState('hours');
   const [activeTab, setActiveTab] = useState('gantt');
+  const [notesOpen, setNotesOpen]   = useState(false);
   function switchTab(t) {
     setActiveTab(t);
     if (typeof window !== 'undefined') localStorage.setItem('sondela_tab', t);
@@ -102,6 +103,13 @@ export default function ProjectPage() {
       if (typeof window !== 'undefined') {
         const saved = localStorage.getItem('sondela_tab');
         if (saved) setActiveTab(saved);
+      }
+      // Always pre-load notes so they're ready
+      if (query.token) {
+        fetch(`/api/p/scratchpad?token=${query.token}`)
+          .then(r => r.json())
+          .then(d => { setScratchpad(d.items || []); setScratchLoaded(true); })
+          .catch(() => {});
       }
     } catch (e) { setError(e.message); }
     finally     { setLoading(false); }
@@ -309,14 +317,7 @@ export default function ProjectPage() {
               <button onClick={()=>switchTab('gantt')} style={{...s.viewBtn,...(activeTab==='gantt'?{...s.viewBtnActive,borderBottomColor:colour,color:colour}:{})}}>
                 📊 Project
               </button>
-              <button onClick={()=>{switchTab('scratchpad');loadScratchpad();}} style={{...s.viewBtn,...(activeTab==='scratchpad'?{...s.viewBtnActive,borderBottomColor:'#89b4fa',color:'#89b4fa'}:{})}}>
-                📝 Scratchpad
-                {scratchpad.filter(i=>!i.done&&i.type==='todo').length>0&&(
-                  <span style={{background:'#89b4fa',color:'#1e1e2e',borderRadius:'10px',padding:'1px 7px',fontSize:'0.75em',marginLeft:'4px'}}>
-                    {scratchpad.filter(i=>!i.done&&i.type==='todo').length}
-                  </span>
-                )}
-              </button>
+
               <button onClick={()=>{switchTab('docs');loadDocs();}} style={{...s.viewBtn,...(activeTab==='docs'?{...s.viewBtnActive,borderBottomColor:'#89b4fa',color:'#89b4fa'}:{})}}>📁 Documents</button>
               <button onClick={()=>switchTab('signoff')} style={{...s.viewBtn,...(activeTab==='signoff'?{...s.viewBtnActive,borderBottomColor:'#a6e3a1',color:'#a6e3a1'}:{})}}>✅ Sign-off</button>
             </div>
@@ -367,8 +368,82 @@ export default function ProjectPage() {
                 </div>
               </div>
             </div>
+            {/* Notes floating button */}
+            <div className="no-print" style={{position:'fixed',right:'20px',bottom:'24px',zIndex:200}}>
+              <button onClick={()=>setNotesOpen(p=>!p)}
+                style={{background:notesOpen?'#89b4fa':'#313244',color:notesOpen?'#1e1e2e':'#cdd6f4',border:'2px solid #89b4fa',borderRadius:'50px',padding:'10px 20px',fontSize:'0.88em',fontWeight:700,cursor:'pointer',boxShadow:'0 4px 16px rgba(0,0,0,0.4)',display:'flex',alignItems:'center',gap:'8px',transition:'all 0.2s'}}>
+                📝 Notes
+                {scratchpad.filter(i=>!i.done&&i.type==='todo').length>0&&(
+                  <span style={{background:notesOpen?'#1e1e2e':'#89b4fa',color:notesOpen?'#89b4fa':'#1e1e2e',borderRadius:'10px',padding:'1px 7px',fontSize:'0.75em'}}>
+                    {scratchpad.filter(i=>!i.done&&i.type==='todo').length}
+                  </span>
+                )}
+              </button>
+            </div>
 
-
+            {/* Notes slide-in drawer */}
+            {notesOpen&&(
+              <div style={{position:'fixed',top:0,right:0,height:'100vh',width:'380px',background:'#1e1e2e',borderLeft:'1px solid #45475a',zIndex:300,display:'flex',flexDirection:'column',boxShadow:'-8px 0 32px rgba(0,0,0,0.5)'}} className="no-print">
+                <div style={{padding:'14px 16px',borderBottom:'1px solid #313244',display:'flex',justifyContent:'space-between',alignItems:'center',background:'#181825',flexShrink:0}}>
+                  <div>
+                    <div style={{color:'#89b4fa',fontWeight:700,fontSize:'0.9em'}}>📝 Session Notes</div>
+                    <div style={{color:'#6c7086',fontSize:'0.7em',marginTop:'2px'}}>Shared with your consultant</div>
+                  </div>
+                  <button onClick={()=>setNotesOpen(false)} style={{background:'none',border:'none',color:'#6c7086',cursor:'pointer',fontSize:'1.3em',padding:'4px 8px'}}>×</button>
+                </div>
+                <div style={{padding:'12px',borderBottom:'1px solid #313244',flexShrink:0}}>
+                  <input placeholder="Your name (optional)" value={clientName} onChange={e=>setClientName(e.target.value)}
+                    style={{width:'100%',background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'7px 10px',color:'#cdd6f4',fontSize:'0.8em',boxSizing:'border-box',marginBottom:'8px'}}/>
+                  <div style={{display:'flex',background:'#181825',borderRadius:'6px',padding:'2px',gap:'2px',marginBottom:'8px'}}>
+                    <button onClick={()=>setNewItemType('todo')} style={{flex:1,background:newItemType==='todo'?'#313244':'transparent',border:'none',color:newItemType==='todo'?'#cdd6f4':'#6c7086',borderRadius:'4px',padding:'5px',fontSize:'0.75em',cursor:'pointer'}}>☐ To-do</button>
+                    <button onClick={()=>setNewItemType('note')} style={{flex:1,background:newItemType==='note'?'#313244':'transparent',border:'none',color:newItemType==='note'?'#cdd6f4':'#6c7086',borderRadius:'4px',padding:'5px',fontSize:'0.75em',cursor:'pointer'}}>📝 Note</button>
+                  </div>
+                  <textarea
+                    placeholder={newItemType==='todo'?"Add something to cover next session...":"Add a note or paste meeting notes..."}
+                    value={newItem} onChange={e=>setNewItem(e.target.value)}
+                    onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&newItem.trim().length<200){e.preventDefault();addScratchItem();}}}
+                    rows={3}
+                    style={{width:'100%',background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'8px 10px',color:'#cdd6f4',fontSize:'0.82em',resize:'vertical',fontFamily:'inherit',boxSizing:'border-box',marginBottom:'8px'}}/>
+                  <button onClick={addScratchItem} disabled={!newItem.trim()}
+                    style={{width:'100%',background:'#89b4fa',color:'#1e1e2e',border:'none',borderRadius:'6px',padding:'8px',fontSize:'0.85em',fontWeight:700,cursor:newItem.trim()?'pointer':'not-allowed',opacity:newItem.trim()?1:0.5}}>
+                    Add Note
+                  </button>
+                </div>
+                <div style={{flex:1,overflowY:'auto',padding:'12px'}}>
+                  {scratchError&&<div style={{background:'#2e1e1e',border:'1px solid #f38ba8',borderRadius:'6px',padding:'8px',fontSize:'0.78em',color:'#f38ba8',marginBottom:'8px'}}>⚠️ {scratchError}</div>}
+                  {scratchpad.length===0&&<div style={{color:'#45475a',fontSize:'0.82em',fontStyle:'italic',textAlign:'center',padding:'20px 0'}}>No notes yet</div>}
+                  {scratchpad.map(item=>(
+                    <div key={item.id} style={{padding:'10px',background:item.done?'#181825':'#252535',borderRadius:'8px',marginBottom:'6px',border:'1px solid #313244',opacity:item.done?0.6:1}}>
+                      {editingId===item.id?(
+                        <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+                          <textarea value={editText} onChange={e=>setEditText(e.target.value)} rows={3}
+                            style={{width:'100%',background:'#313244',border:'1px solid #89b4fa',borderRadius:'6px',padding:'6px',color:'#cdd6f4',fontSize:'0.82em',resize:'vertical',fontFamily:'inherit',boxSizing:'border-box'}}/>
+                          <div style={{display:'flex',gap:'6px'}}>
+                            <button onClick={()=>saveEdit(item.id)} style={{flex:1,background:'#89b4fa',border:'none',color:'#1e1e2e',borderRadius:'4px',padding:'5px',fontSize:'0.78em',cursor:'pointer',fontWeight:700}}>Save</button>
+                            <button onClick={()=>{setEditingId(null);setEditText('');}} style={{flex:1,background:'#45475a',border:'none',color:'#cdd6f4',borderRadius:'4px',padding:'5px',fontSize:'0.78em',cursor:'pointer'}}>Cancel</button>
+                          </div>
+                        </div>
+                      ):(
+                        <div>
+                          <div style={{display:'flex',alignItems:'flex-start',gap:'8px',marginBottom:'4px'}}>
+                            {item.type==='todo'&&<button onClick={()=>scratchAction('toggle',{id:item.id})} style={{background:'none',border:'none',cursor:'pointer',fontSize:'1em',padding:'0',flexShrink:0,color:'#89b4fa'}}>{item.done?'☑':'☐'}</button>}
+                            {item.type==='note'&&<span style={{fontSize:'0.85em',flexShrink:0}}>📝</span>}
+                            <div style={{fontSize:'0.82em',color:'#cdd6f4',textDecoration:item.done?'line-through':'none',lineHeight:1.5,flex:1,whiteSpace:'pre-wrap'}}>{item.text}</div>
+                          </div>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                            <span style={{fontSize:'0.68em',color:'#45475a'}}>{item.author==='admin'?'Consultant':'Client'} · {item.ts}</span>
+                            <div style={{display:'flex',gap:'2px'}}>
+                              <button onClick={()=>{setEditingId(item.id);setEditText(item.text);}} style={{background:'none',border:'none',color:'#6c7086',cursor:'pointer',padding:'2px 4px',fontSize:'0.8em'}}>✏️</button>
+                              <button onClick={()=>scratchAction('delete',{id:item.id})} style={{background:'none',border:'none',color:'#45475a',cursor:'pointer',padding:'2px 4px',fontSize:'0.9em'}}>×</button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* View switcher (only shown in Project tab) */}
             {activeTab==='gantt'&&<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px',flexWrap:'wrap',gap:'10px'}} className="no-print">
@@ -506,77 +581,7 @@ export default function ProjectPage() {
             {/* Bottom panels */}
             <div style={{marginTop:'20px'}}>
 
-              {/* Scratchpad */}
-              {activeTab==='scratchpad'&&(
-                <div style={{background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'20px',marginBottom:'16px'}}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px',flexWrap:'wrap',gap:'10px'}}>
-                    <div>
-                      <h3 style={{color:'#cdd6f4',margin:'0 0 4px',fontSize:'1em'}}>📝 Session Scratchpad</h3>
-                      <p style={{color:'#6c7086',fontSize:'0.78em',margin:0}}>Shared with your consultant · Add things to cover, questions, or notes</p>
-                    </div>
-                    <input placeholder="Your name (optional)" value={clientName} onChange={e=>setClientName(e.target.value)}
-                      style={{background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'6px 12px',color:'#cdd6f4',fontSize:'0.8em',width:'160px'}}/>
-                  </div>
-                  <div style={{marginBottom:'16px'}}>
-                    <div style={{display:'flex',gap:'8px',marginBottom:'8px',flexWrap:'wrap',alignItems:'center'}}>
-                      <div style={{display:'flex',background:'#1e1e2e',borderRadius:'6px',padding:'2px',gap:'2px'}}>
-                        <button onClick={()=>setNewItemType('todo')} style={{background:newItemType==='todo'?'#313244':'transparent',border:'none',color:newItemType==='todo'?'#cdd6f4':'#6c7086',borderRadius:'4px',padding:'5px 10px',fontSize:'0.75em',cursor:'pointer'}}>☐ To-do</button>
-                        <button onClick={()=>setNewItemType('note')} style={{background:newItemType==='note'?'#313244':'transparent',border:'none',color:newItemType==='note'?'#cdd6f4':'#6c7086',borderRadius:'4px',padding:'5px 10px',fontSize:'0.75em',cursor:'pointer'}}>📝 Note</button>
-                      </div>
-                      <span style={{fontSize:'0.72em',color:'#45475a'}}>Press Enter to add · paste large text below</span>
-                    </div>
-                    <div style={{display:'flex',gap:'8px'}}>
-                      <textarea
-                        placeholder={newItemType==='todo'?"Add a to-do item, or paste a large block of text...":"Add a note, question, or paste meeting notes..."}
-                        value={newItem} onChange={e=>setNewItem(e.target.value)}
-                        onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&newItem.trim().length<200){e.preventDefault();addScratchItem();}}}
-                        rows={newItem.length>100?4:2}
-                        style={{flex:1,background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'8px 12px',color:'#cdd6f4',fontSize:'0.85em',resize:'vertical',fontFamily:'inherit',lineHeight:1.5}}/>
-                      <button onClick={addScratchItem} disabled={!newItem.trim()}
-                        style={{background:'#89b4fa',color:'#1e1e2e',border:'none',borderRadius:'6px',padding:'8px 16px',fontSize:'0.85em',fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',alignSelf:'flex-end'}}>
-                        Add
-                      </button>
-                    </div>
-                  </div>
-                  {scratchError && <div style={{background:'#2e1e1e',border:'1px solid #f38ba8',borderRadius:'6px',padding:'8px 12px',fontSize:'0.8em',color:'#f38ba8',marginBottom:'10px'}}>⚠️ {scratchError}</div>}
-                  {scratchpad.length===0&&<div style={{color:'#45475a',fontSize:'0.85em',fontStyle:'italic',textAlign:'center',padding:'20px'}}>Nothing here yet — add your first item above</div>}
-                  {scratchpad.map(item=>(
-                    <div key={item.id} style={{padding:'10px 12px',background:item.done?'#1a1a2a':'#1e1e2e',borderRadius:'8px',marginBottom:'6px',opacity:item.done?0.6:1}}>
-                      {editingId===item.id ? (
-                        <div style={{display:'flex',gap:'6px'}}>
-                          <textarea value={editText} onChange={e=>setEditText(e.target.value)} rows={2}
-                            style={{flex:1,background:'#313244',border:'1px solid #89b4fa',borderRadius:'6px',padding:'6px 8px',color:'#cdd6f4',fontSize:'0.85em',resize:'vertical',fontFamily:'inherit'}}/>
-                          <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
-                            <button onClick={()=>saveEdit(item.id)} style={{background:'#89b4fa',border:'none',color:'#1e1e2e',borderRadius:'4px',padding:'4px 8px',fontSize:'0.75em',cursor:'pointer',fontWeight:700}}>Save</button>
-                            <button onClick={()=>{setEditingId(null);setEditText('');}} style={{background:'#45475a',border:'none',color:'#cdd6f4',borderRadius:'4px',padding:'4px 8px',fontSize:'0.75em',cursor:'pointer'}}>Cancel</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{display:'flex',alignItems:'flex-start',gap:'10px'}}>
-                          {item.type==='todo'?(
-                            <button onClick={()=>scratchAction('toggle',{id:item.id})}
-                              style={{background:'none',border:'none',cursor:'pointer',fontSize:'1.1em',padding:'0',flexShrink:0,marginTop:'2px'}}>
-                              {item.done?'☑':'☐'}
-                            </button>
-                          ):<span style={{fontSize:'0.9em',flexShrink:0,marginTop:'2px'}}>📝</span>}
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:'0.85em',color:'#cdd6f4',textDecoration:item.done?'line-through':'none',lineHeight:1.4,whiteSpace:'pre-wrap'}}>{item.text}</div>
-                            <div style={{fontSize:'0.7em',color:'#45475a',marginTop:'3px'}}>{item.author==='admin'?'Consultant':'Client'} · {item.ts}</div>
-                          </div>
-                          <div style={{display:'flex',gap:'4px',flexShrink:0}}>
-                            <button onClick={()=>{setEditingId(item.id);setEditText(item.text);}}
-                              style={{background:'none',border:'none',color:'#6c7086',cursor:'pointer',fontSize:'0.8em',padding:'2px 4px'}}>✏️</button>
-                            <button onClick={()=>scratchAction('delete',{id:item.id})}
-                              style={{background:'none',border:'none',color:'#45475a',cursor:'pointer',fontSize:'1em',padding:'2px 4px'}}>×</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Documents */}
+                            {/* Documents */}
               {activeTab==='docs'&&(
                 <div style={{background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'20px',marginBottom:'16px'}}>
                   <h3 style={{color:'#cdd6f4',margin:'0 0 4px',fontSize:'1em'}}>📁 Document Library</h3>
