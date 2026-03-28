@@ -284,6 +284,23 @@ export default function ProjectPage() {
               </div>
             </div>
 
+            {/* Top-level tab bar */}
+            <div style={{display:'flex',gap:'0',background:'#181825',borderRadius:'10px',padding:'4px',width:'100%',marginBottom:'16px',flexWrap:'wrap'}} className="no-print">
+              <button onClick={()=>switchTab('gantt')} style={{...s.viewBtn,...(activeTab==='gantt'?{...s.viewBtnActive,borderBottomColor:colour,color:colour}:{})}}>
+                📊 Project
+              </button>
+              <button onClick={()=>{switchTab('scratchpad');loadScratchpad();}} style={{...s.viewBtn,...(activeTab==='scratchpad'?{...s.viewBtnActive,borderBottomColor:'#89b4fa',color:'#89b4fa'}:{})}}>
+                📝 Scratchpad
+                {scratchpad.filter(i=>!i.done&&i.type==='todo').length>0&&(
+                  <span style={{background:'#89b4fa',color:'#1e1e2e',borderRadius:'10px',padding:'1px 7px',fontSize:'0.75em',marginLeft:'4px'}}>
+                    {scratchpad.filter(i=>!i.done&&i.type==='todo').length}
+                  </span>
+                )}
+              </button>
+              <button onClick={()=>{switchTab('docs');loadDocs();}} style={{...s.viewBtn,...(activeTab==='docs'?{...s.viewBtnActive,borderBottomColor:'#89b4fa',color:'#89b4fa'}:{})}}>📁 Documents</button>
+              <button onClick={()=>switchTab('signoff')} style={{...s.viewBtn,...(activeTab==='signoff'?{...s.viewBtnActive,borderBottomColor:'#a6e3a1',color:'#a6e3a1'}:{})}}>✅ Sign-off</button>
+            </div>
+
             {/* Stats */}
             <div style={s.stats} className="print-section">
               {[
@@ -331,22 +348,7 @@ export default function ProjectPage() {
               </div>
             </div>
 
-            {/* Top-level tab bar */}
-            <div style={{display:'flex',gap:'0',background:'#181825',borderRadius:'10px',padding:'4px',width:'100%',marginBottom:'16px',flexWrap:'wrap'}} className="no-print">
-              <button onClick={()=>switchTab('gantt')} style={{...s.viewBtn,...(activeTab==='gantt'?{...s.viewBtnActive,borderBottomColor:colour,color:colour}:{})}}>
-                📊 Project
-              </button>
-              <button onClick={()=>{switchTab('scratchpad');loadScratchpad();}} style={{...s.viewBtn,...(activeTab==='scratchpad'?{...s.viewBtnActive,borderBottomColor:'#89b4fa',color:'#89b4fa'}:{})}}>
-                📝 Scratchpad
-                {scratchpad.filter(i=>!i.done&&i.type==='todo').length>0&&(
-                  <span style={{background:'#89b4fa',color:'#1e1e2e',borderRadius:'10px',padding:'1px 7px',fontSize:'0.75em',marginLeft:'4px'}}>
-                    {scratchpad.filter(i=>!i.done&&i.type==='todo').length}
-                  </span>
-                )}
-              </button>
-              <button onClick={()=>{switchTab('docs');loadDocs();}} style={{...s.viewBtn,...(activeTab==='docs'?{...s.viewBtnActive,borderBottomColor:'#89b4fa',color:'#89b4fa'}:{})}}>📁 Documents</button>
-              <button onClick={()=>switchTab('signoff')} style={{...s.viewBtn,...(activeTab==='signoff'?{...s.viewBtnActive,borderBottomColor:'#a6e3a1',color:'#a6e3a1'}:{})}}>✅ Sign-off</button>
-            </div>
+
 
             {/* View switcher (only shown in Project tab) */}
             {activeTab==='gantt'&&<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px',flexWrap:'wrap',gap:'10px'}} className="no-print">
