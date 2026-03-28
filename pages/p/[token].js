@@ -39,16 +39,14 @@ export default function ProjectPage() {
   const [loading, setLoading]   = useState(true);
   const [lastFetch, setLastFetch] = useState(null);
   const [view, setView]         = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('sondela_view') || 'gantt';
-    }
+    if (typeof window !== 'undefined') return localStorage.getItem('sondela_view') || 'gantt';
     return 'gantt';
   });
-  const [selected, setSelected] = useState(null);
+  const [selected, setSelected]   = useState(null);
   const [hideCompleted, setHideCompleted] = useState(false);
-  const [collapsed, setCollapsed] = useState({});
-  const [pctMode, setPctMode]     = useState('hours');
-  const [activeTab, setActiveTab]   = useState('tasks'); // 'tasks' | 'scratchpad' | 'docs'
+  const [collapsed, setCollapsed]   = useState({});
+  const [pctMode, setPctMode]       = useState('hours');
+  const [activeTab, setActiveTab]   = useState('tasks');
   const [scratchpad, setScratchpad] = useState([]);
   const [scratchLoaded, setScratchLoaded] = useState(false);
   const [newItem, setNewItem]       = useState('');
@@ -62,8 +60,7 @@ export default function ProjectPage() {
   const [signoffName, setSignoffName] = useState('');
   const [signoffDone, setSignoffDone] = useState({});
   const [attachments, setAttachments] = useState([]);
-  const [docsLoaded, setDocsLoaded] = useState(false);
-
+  const [docsLoaded, setDocsLoaded]   = useState(false);
 
   function toggleCollapse(name) { setCollapsed(p => ({...p, [name]: !p[name]})); }
 
