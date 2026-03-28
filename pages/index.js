@@ -12,7 +12,11 @@ export default function Home() {
   const [linkMgr, setLinkMgr]     = useState(null);
   const [page, setPage]           = useState('projects');
   const [linkData, setLinkData]   = useState([]);
-  const [linksLoading, setLinksLoading] = useState(false); // 'projects' | 'links'
+  const [linksLoading, setLinksLoading] = useState(false);
+  const [healthData, setHealthData] = useState([]);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [quickAction, setQuickAction] = useState(null); // {project, type:'note'|'time'|'summary'}
+  const [weeklyProject, setWeeklyProject] = useState(null); // 'projects' | 'links'
 
   useEffect(() => {
     fetch('/api/projects')
@@ -58,6 +62,14 @@ export default function Home() {
     );
     window.location.href = `mailto:${toEmail}?subject=${subj}&body=${body}`;
     setEmailModal(null);
+  }
+
+  async function fetchHealth() {
+    setHealthLoading(true);
+    const res = await fetch('/api/admin/health');
+    const d = await res.json();
+    setHealthData(d.projects || []);
+    setHealthLoading(false);
   }
 
   async function fetchLinks() {
@@ -110,6 +122,12 @@ export default function Home() {
               <button onClick={()=>{setPage('links');if(!linkData.length)fetchLinks();}} style={{background:page==='links'?'#45475a':'transparent',border:'none',color:page==='links'?'#cdd6f4':'#6c7086',padding:'6px 14px',borderRadius:'6px',cursor:'pointer',fontSize:'0.82em',fontWeight:page==='links'?700:400}}>
                 🔐 Link Manager
               </button>
+              <button onClick={()=>{setPage('health');if(!healthData.length)fetchHealth();}} style={{background:page==='health'?'#45475a':'transparent',border:'none',color:page==='health'?'#cdd6f4':'#6c7086',padding:'6px 14px',borderRadius:'6px',cursor:'pointer',fontSize:'0.82em',fontWeight:page==='health'?700:400}}>
+                🏥 Health
+              </button>
+              <button onClick={()=>{setPage('report');}} style={{background:page==='report'?'#45475a':'transparent',border:'none',color:page==='report'?'#cdd6f4':'#6c7086',padding:'6px 14px',borderRadius:'6px',cursor:'pointer',fontSize:'0.82em',fontWeight:page==='report'?700:400}}>
+                📊 Reports
+              </button>
             </div>
             <a href="/api/auth/logout" style={s.signout}>Sign out</a>
           </div>
@@ -152,7 +170,7 @@ export default function Home() {
                   <span style={s.clientCount}>{group.projects.length} project{group.projects.length!==1?'s':''}</span>
                 </div>
                 <div style={s.grid}>
-                  {group.projects.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} onLinkMgr={openLinkMgr} shareUrl={getShareUrl(p)} statusColour={statusColour} statusLabel={statusLabel}/>)}
+                  {group.projects.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} onLinkMgr={openLinkMgr} onQuickAction={(p,t)=>setQuickAction({project:p,type:t})} shareUrl={getShareUrl(p)} statusColour={statusColour} statusLabel={statusLabel}/>)}
                 </div>
               </div>
             ))
@@ -161,12 +179,121 @@ export default function Home() {
           {/* Flat list */}
           {!loading && groupBy === 'all' && (
             <div style={s.grid}>
-              {filtered.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} onLinkMgr={openLinkMgr} shareUrl={getShareUrl(p)} statusColour={statusColour} statusLabel={statusLabel}/>)}
+              {filtered.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} onLinkMgr={openLinkMgr} onQuickAction={(p,t)=>setQuickAction({project:p,type:t})} shareUrl={getShareUrl(p)} statusColour={statusColour} statusLabel={statusLabel}/>)}
               {filtered.length === 0 && <p style={s.empty}>No projects match your search.</p>}
             </div>
           )}
         </main>
       </div>
+
+      {/* Health Dashboard */}
+      {page === 'health' && (
+        <div style={{maxWidth:'1300px',margin:'0 auto',padding:'28px'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'20px'}}>
+            <h2 style={{color:'#cdd6f4',margin:0,fontSize:'1.1em'}}>🏥 Project Health Dashboard</h2>
+            <button onClick={fetchHealth} style={{background:'#313244',border:'1px solid #45475a',color:'#cdd6f4',borderRadius:'6px',padding:'7px 14px',fontSize:'0.82em',cursor:'pointer'}}>
+              {healthLoading?'Loading...':'⟳ Refresh'}
+            </button>
+          </div>
+          {healthLoading&&<div style={{color:'#6c7086',textAlign:'center',padding:'40px'}}>Loading project health data...</div>}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:'14px'}}>
+            {healthData.map(p=>{
+              const ragCol = p.rag?.status==='green'?'#a6e3a1':p.rag?.status==='red'?'#f38ba8':'#f9e2af';
+              const pctH   = p.budget ? Math.min(100,Math.round((p.hours/p.budget)*100)) : null;
+              return (
+                <div key={p.id} style={{background:'#252535',border:`1px solid ${p.client_colour}40`,borderRadius:'12px',overflow:'hidden'}}>
+                  <div style={{height:'3px',background:p.client_colour,width:'100%'}}></div>
+                  <div style={{padding:'14px 16px'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'8px'}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:'0.72em',color:p.client_colour,fontWeight:600,marginBottom:'3px'}}>{p.client_name}</div>
+                        <div style={{fontSize:'0.85em',color:'#cdd6f4',fontWeight:600,lineHeight:1.3}}>{p.summary}</div>
+                      </div>
+                      <span style={{flexShrink:0,marginLeft:'8px',display:'inline-flex',alignItems:'center',gap:'5px',background:ragCol+'22',border:`1px solid ${ragCol}40`,borderRadius:'12px',padding:'3px 10px',fontSize:'0.72em',color:ragCol,fontWeight:600}}>
+                        <span style={{width:'6px',height:'6px',borderRadius:'50%',background:ragCol,display:'inline-block'}}></span>
+                        {p.rag?.label}
+                      </span>
+                    </div>
+                    {/* Progress */}
+                    <div style={{marginBottom:'10px'}}>
+                      <div style={{height:'6px',background:'#1e1e2e',borderRadius:'3px',marginBottom:'4px'}}>
+                        <div style={{height:'6px',background:p.client_colour,width:`${p.pct}%`,borderRadius:'3px',transition:'width 0.3s'}}></div>
+                      </div>
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72em',color:'#6c7086'}}>
+                        <span>{p.pct}% · {p.done}/{p.total} tasks</span>
+                        <span style={{color:'#fab387'}}>{p.hours.toFixed(1)}h{p.budget?` / ${p.budget}h`:''}</span>
+                      </div>
+                    </div>
+                    {/* Burn rate */}
+                    {p.projected&&(
+                      <div style={{fontSize:'0.75em',color:p.projected>p.budget?'#f38ba8':'#a6adc8',marginBottom:'8px'}}>
+                        🔥 Projected: {p.projected}h{p.budget?` of ${p.budget}h budget`:''}
+                        {p.projected>p.budget?' ⚠️ Over budget':''}
+                      </div>
+                    )}
+                    {/* Next session */}
+                    {p.nextSession&&(
+                      <div style={{fontSize:'0.75em',color:'#89b4fa',marginBottom:'8px'}}>
+                        📅 Next: {p.nextSession.summary} · {p.nextSession.startdate}
+                      </div>
+                    )}
+                    {/* Views */}
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72em',color:'#45475a'}}>
+                      <span>👁 {p.views} view{p.views!==1?'s':''}</span>
+                      <span style={{color:p.linkStatus==='active'?'#a6e3a1':p.linkStatus==='revoked'?'#f38ba8':'#f9e2af'}}>
+                        {p.linkStatus==='active'?'✅ Active':p.linkStatus==='revoked'?'🔒 Revoked':'⏰ Expired'}
+                      </span>
+                    </div>
+                    <a href={`/p/${p.token}`} target="_blank" rel="noreferrer"
+                      style={{display:'block',marginTop:'10px',background:'#313244',border:'1px solid #45475a',color:'#a6adc8',borderRadius:'6px',padding:'6px',fontSize:'0.78em',textAlign:'center',textDecoration:'none'}}>
+                      View Portal →
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Reports Page */}
+      {page === 'report' && (
+        <div style={{maxWidth:'900px',margin:'0 auto',padding:'28px'}}>
+          <h2 style={{color:'#cdd6f4',marginBottom:'20px',fontSize:'1.1em'}}>📊 Reports</h2>
+          <div style={{background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'24px',marginBottom:'16px'}}>
+            <h3 style={{color:'#89b4fa',margin:'0 0 8px',fontSize:'1em'}}>📋 Weekly Status Report</h3>
+            <p style={{color:'#6c7086',fontSize:'0.85em',margin:'0 0 16px'}}>Generate a formatted status report across all active projects</p>
+            <button onClick={()=>{
+              const w = window.open('','_blank');
+              const rows = projects.filter(p=>p.status_id!==9).map(p=>
+                `<tr><td>${p.client_name}</td><td>${p.summary}</td><td>${p.pct_complete}%</td><td>${p.done_tasks}/${p.total_tasks}</td><td>${p.hours_logged.toFixed(1)}h</td></tr>`
+              ).join('');
+              w.document.write(`
+                <html><head><title>Weekly Status Report - ${new Date().toLocaleDateString('en-GB')}</title>
+                <style>body{font-family:Arial;padding:30px;max-width:900px;margin:0 auto}h1{color:#1e1e2e}table{width:100%;border-collapse:collapse}th,td{padding:10px;border:1px solid #ddd;text-align:left}th{background:#1e1e2e;color:#fff}tr:nth-child(even){background:#f5f5f5}@media print{.no-print{display:none}}</style>
+                </head><body>
+                <h1>Weekly Status Report</h1><p>Generated: ${new Date().toLocaleDateString('en-GB')} by Sondela Consulting</p>
+                <button class="no-print" onclick="window.print()" style="margin-bottom:20px;padding:8px 16px;background:#1e1e2e;color:#fff;border:none;border-radius:4px;cursor:pointer">🖨 Print</button>
+                <table><thead><tr><th>Client</th><th>Project</th><th>Progress</th><th>Tasks</th><th>Hours</th></tr></thead>
+                <tbody>${rows}</tbody></table>
+                </body></html>
+              `);
+              w.document.close();
+            }} style={{background:'#89b4fa',color:'#1e1e2e',border:'none',borderRadius:'8px',padding:'10px 20px',fontSize:'0.88em',fontWeight:700,cursor:'pointer'}}>
+              Generate Report
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Action Modal (note/time/summary) */}
+      {quickAction && (
+        <QuickActionModal
+          project={quickAction.project}
+          type={quickAction.type}
+          onClose={()=>setQuickAction(null)}
+        />
+      )}
 
       {/* Link Manager Page */}
       {page === 'links' && (
@@ -232,7 +359,7 @@ export default function Home() {
   );
 }
 
-function ProjectCard({ p, copied, onCopy, onEmail, onLinkMgr, shareUrl, statusColour, statusLabel }) {
+function ProjectCard({ p, copied, onCopy, onEmail, onLinkMgr, onQuickAction, shareUrl, statusColour, statusLabel }) {
   const viewUrl = `/p/${p.token}`;
   return (
     <div className="proj-card" style={{...s.card, borderColor: p.client_colour + '40'}}>
@@ -284,6 +411,15 @@ function ProjectCard({ p, copied, onCopy, onEmail, onLinkMgr, shareUrl, statusCo
         </button>
         <button style={s.btnIcon} onClick={()=>onLinkMgr(p)} title="Manage link access">
           🔐
+        </button>
+        <button style={s.btnIcon} onClick={()=>onQuickAction(p,'note')} title="Add note to project">
+          📝
+        </button>
+        <button style={s.btnIcon} onClick={()=>onQuickAction(p,'time')} title="Log time">
+          ⏱
+        </button>
+        <button style={s.btnIcon} onClick={()=>onQuickAction(p,'summary')} title="Send session summary">
+          📧
         </button>
         <a href={`/client/${p.client_id}`} style={s.btnIcon} title='All client projects for this client'>
           👤
@@ -558,6 +694,94 @@ function LinkMgrModal({ project, initialMeta, onClose }) {
             {saving ? 'Saving...' : saved ? '✅ Saved!' : 'Save Changes'}
           </button>
           <button style={s.btnCancel} onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuickActionModal({ project, type, onClose }) {
+  const [tasks, setTasks]     = useState([]);
+  const [taskId, setTaskId]   = useState('');
+  const [note, setNote]       = useState('');
+  const [minutes, setMinutes] = useState(60);
+  const [toEmail, setToEmail] = useState('');
+  const [saving, setSaving]   = useState(false);
+  const [saved, setSaved]     = useState(false);
+
+  useEffect(() => {
+    if (type !== 'summary') {
+      fetch(`/api/project/${project.id}`)
+        .then(r => r.json())
+        .then(d => setTasks(d.taskDetails || []));
+    }
+  }, [project.id, type]);
+
+  async function submit() {
+    if (type === 'summary') {
+      if (!toEmail || !taskId) return;
+      setSaving(true);
+      await fetch('/api/admin/sendsummary', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: project.token, ticketId: parseInt(taskId), toEmail }),
+      });
+    } else {
+      if (!taskId || !note.trim()) return;
+      setSaving(true);
+      await fetch(`/api/admin/project/${project.token}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: type, ticketId: parseInt(taskId), note, minutes }),
+      });
+    }
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => { setSaved(false); onClose(); }, 1500);
+  }
+
+  const titles = { note: '📝 Add Note', time: '⏱ Log Time', summary: '📧 Send Session Summary' };
+
+  return (
+    <div style={s.modalOverlay} onClick={onClose}>
+      <div style={{...s.modal, maxWidth:'480px'}} onClick={e=>e.stopPropagation()}>
+        <h3 style={s.modalTitle}>{titles[type]}</h3>
+        <p style={s.modalSub}>{project.client_name} · {project.summary}</p>
+
+        {type === 'summary' ? (
+          <>
+            <label style={s.modalLabel}>Session / Task</label>
+            <select value={taskId} onChange={e=>setTaskId(e.target.value)} style={{...s.modalInput,marginBottom:'12px'}}>
+              <option value="">Select a task...</option>
+              {tasks.map(t=><option key={t.id} value={t.id}>{t.summary}</option>)}
+            </select>
+            <label style={s.modalLabel}>Send to email</label>
+            <input type="email" placeholder="client@company.com" value={toEmail} onChange={e=>setToEmail(e.target.value)} style={s.modalInput}/>
+          </>
+        ) : (
+          <>
+            <label style={s.modalLabel}>Task</label>
+            <select value={taskId} onChange={e=>setTaskId(e.target.value)} style={{...s.modalInput,marginBottom:'12px'}}>
+              <option value="">Select a task...</option>
+              {tasks.map(t=><option key={t.id} value={t.id}>{t.summary}</option>)}
+            </select>
+            {type === 'time' && (
+              <>
+                <label style={s.modalLabel}>Time (minutes)</label>
+                <input type="number" min={1} value={minutes} onChange={e=>setMinutes(parseInt(e.target.value)||60)} style={{...s.modalInput,marginBottom:'12px'}}/>
+              </>
+            )}
+            <label style={s.modalLabel}>{type==='time'?'Note (optional)':'Note'}</label>
+            <textarea value={note} onChange={e=>setNote(e.target.value)} rows={4}
+              placeholder={type==='time'?"What did you work on?":'Add your note...'}
+              style={{...s.modalInput,resize:'vertical',height:'100px',fontFamily:'inherit'}}/>
+          </>
+        )}
+
+        <div style={s.modalActions}>
+          <button style={{...s.btnView,background:saved?'#a6e3a1':undefined,color:saved?'#1e1e2e':undefined}}
+            onClick={submit} disabled={saving||saved}>
+            {saving?'Saving...':saved?'✅ Done!':type==='summary'?'Send Email →':'Save →'}
+          </button>
+          <button style={s.btnCancel} onClick={onClose}>Cancel</button>
         </div>
       </div>
     </div>

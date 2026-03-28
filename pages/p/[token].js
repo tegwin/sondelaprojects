@@ -47,9 +47,87 @@ export default function ProjectPage() {
   const [selected, setSelected] = useState(null);
   const [hideCompleted, setHideCompleted] = useState(false);
   const [collapsed, setCollapsed] = useState({});
-  const [pctMode, setPctMode]   = useState('hours');
+  const [pctMode, setPctMode]     = useState('hours');
+  const [activeTab, setActiveTab]   = useState('tasks'); // 'tasks' | 'scratchpad' | 'docs'
+  const [scratchpad, setScratchpad] = useState([]);
+  const [scratchLoaded, setScratchLoaded] = useState(false);
+  const [newItem, setNewItem]       = useState('');
+  const [newItemType, setNewItemType] = useState('todo');
+  const [clientName, setClientName] = useState('');
+  const [noteTicketId, setNoteTicketId] = useState(null);
+  const [noteText, setNoteText]     = useState('');
+  const [noteSubmitting, setNoteSubmitting] = useState(false);
+  const [noteSaved, setNoteSaved]   = useState(false);
+  const [signoffMs, setSignoffMs]   = useState(null);
+  const [signoffName, setSignoffName] = useState('');
+  const [signoffDone, setSignoffDone] = useState({});
+  const [attachments, setAttachments] = useState([]);
+  const [docsLoaded, setDocsLoaded] = useState(false);
+  const [collabItems, setCollabItems] = useState([]);
+  const [collabText, setCollabText]   = useState('');
+  const [collabSaving, setCollabSaving] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [activePanel, setActivePanel] = useState(null); // 'collab'|'docs'|'report'|null
+  const [signoffs, setSignoffs]       = useState({});   // milestoneName -> signed
 
   function toggleCollapse(name) { setCollapsed(p => ({...p, [name]: !p[name]})); }
+
+  async function loadScratchpad() {
+    if (!query.token || scratchLoaded) return;
+    const res = await fetch(`/api/p/scratchpad?token=${query.token}`);
+    const d = await res.json();
+    setScratchpad(d.items || []);
+    setScratchLoaded(true);
+  }
+
+  async function scratchAction(action, item) {
+    const res = await fetch(`/api/p/scratchpad?token=${query.token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, item }),
+    });
+    const d = await res.json();
+    setScratchpad(d.items || []);
+  }
+
+  async function addScratchItem() {
+    if (!newItem.trim()) return;
+    await scratchAction('add', { text: newItem, type: newItemType, author: 'client' });
+    setNewItem('');
+  }
+
+  async function submitNote() {
+    if (!noteText.trim() || !noteTicketId) return;
+    setNoteSubmitting(true);
+    await fetch(`/api/p/note?token=${query.token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticketId: noteTicketId, note: noteText, authorName: clientName || 'Client' }),
+    });
+    setNoteSubmitting(false);
+    setNoteSaved(true);
+    setNoteText('');
+    setTimeout(() => setNoteSaved(false), 3000);
+    load(); // refresh to show new note
+  }
+
+  async function loadDocs() {
+    if (docsLoaded || !query.token) return;
+    const res = await fetch(`/api/p/attachments?token=${query.token}`);
+    const d = await res.json();
+    setAttachments(d.attachments || []);
+    setDocsLoaded(true);
+  }
+
+  async function submitSignoff(msName) {
+    await fetch(`/api/p/signoff?token=${query.token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ milestoneName: msName, signerName: signoffName || 'Client' }),
+    });
+    setSignoffDone(p => ({...p, [msName]: true}));
+    setSignoffMs(null);
+  }
 
   function switchView(v) {
     setView(v);
@@ -85,6 +163,56 @@ export default function ProjectPage() {
   }, []);
 
   useEffect(() => { if (query.token) load(); }, [query.token]);
+
+  async function loadCollab() {
+    if (!query.token) return;
+    const res = await fetch(`/api/collab/${query.token}`);
+    const d   = await res.json();
+    setCollabItems(d.items || []);
+  }
+
+  async function loadAttachments() {
+    if (!query.token) return;
+    const res = await fetch(`/api/attachments/${query.token}`);
+    const d   = await res.json();
+    setAttachments(d.attachments || []);
+  }
+
+  async function addCollabItem() {
+    if (!collabText.trim()) return;
+    setCollabSaving(true);
+    const res = await fetch(`/api/collab/${query.token}`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ text: collabText, author: 'client', authorName: 'Client' }),
+    });
+    const d = await res.json();
+    if (d.item) setCollabItems(prev => [...prev, d.item]);
+    setCollabText('');
+    setCollabSaving(false);
+  }
+
+  async function toggleItem(item) {
+    const res = await fetch(`/api/collab/${query.token}/${item.id}`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ done: !item.done }),
+    });
+    const d = await res.json();
+    if (d.item) setCollabItems(prev => prev.map(i => i.id===item.id ? d.item : i));
+  }
+
+  async function signOffMilestone(milestoneName) {
+    await fetch(`/api/admin/signoff/${query.token}`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ milestoneName, signedBy: 'Client' }),
+    });
+    setSignoffs(prev => ({...prev, [milestoneName]: true}));
+  }
+
+  function openPanel(name) {
+    setActivePanel(p => p===name ? null : name);
+    if (name === 'collab') loadCollab();
+    if (name === 'docs')   loadAttachments();
+  }
 
   useEffect(() => {
     if (!data || !ganttRef.current || view !== 'gantt') return;
@@ -241,6 +369,101 @@ export default function ProjectPage() {
               </div>
             </div>
 
+            {/* Panel buttons */}
+            <div style={{display:'flex',gap:'8px',marginBottom:'12px',flexWrap:'wrap'}} className="no-print">
+              {[
+                { id:'collab', label:'💬 Collaboration', desc:'Shared notes & checklist' },
+                { id:'docs',   label:'📎 Documents',     desc:'Attachments & files' },
+              ].map(btn => (
+                <button key={btn.id} onClick={()=>openPanel(btn.id)}
+                  style={{background:activePanel===btn.id?colour:'#313244',color:activePanel===btn.id?'#1e1e2e':'#cdd6f4',border:`1px solid ${activePanel===btn.id?colour:'#45475a'}`,borderRadius:'8px',padding:'8px 16px',fontSize:'0.82em',cursor:'pointer',fontWeight:activePanel===btn.id?700:400}}>
+                  {btn.label}
+                </button>
+              ))}
+              <a href={`/api/ical/${query.token}`} download
+                style={{background:'#313244',color:'#cdd6f4',border:'1px solid #45475a',borderRadius:'8px',padding:'8px 16px',fontSize:'0.82em',textDecoration:'none',display:'flex',alignItems:'center',gap:'6px'}}>
+                📅 Subscribe Calendar
+              </a>
+              {data.stats.pctComplete===100 && (
+                <a href={`/certificate/${query.token}`} target="_blank" rel="noreferrer"
+                  style={{background:'linear-gradient(135deg,#40a060,#a6e3a1)',color:'#1e1e2e',borderRadius:'8px',padding:'8px 16px',fontSize:'0.82em',fontWeight:700,textDecoration:'none'}}>
+                  🏆 View Certificate
+                </a>
+              )}
+            </div>
+
+            {/* Collaboration Panel */}
+            {activePanel==='collab' && (
+              <div style={{background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'20px',marginBottom:'16px'}} className="no-print">
+                <h3 style={{color:'#cdd6f4',fontSize:'0.95em',margin:'0 0 14px',fontWeight:700}}>💬 Collaboration Board</h3>
+                <p style={{fontSize:'0.78em',color:'#6c7086',margin:'0 0 14px'}}>
+                  Add questions, requests, or notes below — Sondela Consulting will review and respond.
+                </p>
+
+                {/* Add item */}
+                <div style={{display:'flex',gap:'8px',marginBottom:'16px'}}>
+                  <input
+                    value={collabText} onChange={e=>setCollabText(e.target.value)}
+                    onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&(e.preventDefault(),addCollabItem())}
+                    placeholder="Add a note, question, or request..."
+                    style={{flex:1,background:'#1e1e2e',border:'1px solid #45475a',borderRadius:'8px',padding:'10px 14px',color:'#cdd6f4',fontSize:'0.85em'}}
+                  />
+                  <button onClick={addCollabItem} disabled={collabSaving||!collabText.trim()}
+                    style={{background:colour,color:'#1e1e2e',border:'none',borderRadius:'8px',padding:'10px 16px',cursor:'pointer',fontWeight:700,fontSize:'0.85em',opacity:collabSaving?0.6:1}}>
+                    {collabSaving?'...':'Add'}
+                  </button>
+                </div>
+
+                {/* Items list */}
+                {collabItems.length===0 && <p style={{color:'#45475a',fontSize:'0.82em',fontStyle:'italic'}}>No items yet. Add your first note or question above.</p>}
+                {[...collabItems].reverse().map(item => (
+                  <div key={item.id} style={{
+                    background:'#1e1e2e',borderRadius:'8px',padding:'12px 14px',marginBottom:'8px',
+                    borderLeft:`3px solid ${item.done?'#a6e3a1':item.author==='client'?colour:'#89b4fa'}`,
+                    opacity: item.done ? 0.65 : 1,
+                  }}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'10px'}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:'0.88em',color:'#cdd6f4',textDecoration:item.done?'line-through':'none',lineHeight:1.4}}>
+                          {item.text}
+                        </div>
+                        <div style={{fontSize:'0.7em',color:'#6c7086',marginTop:'5px',display:'flex',gap:'10px'}}>
+                          <span>{item.authorName}</span>
+                          <span>{item.createdAt?.substring(0,10)}</span>
+                          {item.done && <span style={{color:'#a6e3a1'}}>✓ Done by {item.doneBy} · {item.doneAt?.substring(0,10)}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Document Library Panel */}
+            {activePanel==='docs' && (
+              <div style={{background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'20px',marginBottom:'16px'}} className="no-print">
+                <h3 style={{color:'#cdd6f4',fontSize:'0.95em',margin:'0 0 14px',fontWeight:700}}>📎 Project Documents</h3>
+                {attachments.length===0
+                  ? <p style={{color:'#45475a',fontSize:'0.82em',fontStyle:'italic'}}>No attachments found on this project's tasks.</p>
+                  : (
+                    <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                      {attachments.map(a => (
+                        <div key={a.id} style={{display:'flex',alignItems:'center',gap:'12px',background:'#1e1e2e',borderRadius:'8px',padding:'10px 14px'}}>
+                          <span style={{fontSize:'1.2em'}}>{a.isImage?'🖼':'📄'}</span>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:'0.85em',color:'#cdd6f4',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.filename}</div>
+                            <div style={{fontSize:'0.72em',color:'#6c7086'}}>{a.uploadedAt} · {(a.size/1024).toFixed(0)}KB · Task #{a.ticketId}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                }
+              </div>
+            )}
+
+            {/* Milestone sign-off (shown in Schedule view for completed milestones) */}
+
             {/* View switcher */}
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px',flexWrap:'wrap',gap:'10px'}} className="no-print">
               <div style={s.viewSwitcher}>
@@ -342,6 +565,26 @@ export default function ProjectPage() {
                   </div>
                 )}
                 <div style={s.blockLbl}>Updates &amp; Notes</div>
+                {/* Client note form */}
+                <div style={{background:'#1e1e2e',borderRadius:'8px',padding:'14px',marginBottom:'12px'}}>
+                  <div style={s.blockLbl}>Add a Note</div>
+                  <textarea
+                    placeholder="Add information, answers, or questions for this task..."
+                    value={noteTicketId===selected.id?noteText:''}
+                    onChange={e=>{setNoteTicketId(selected.id);setNoteText(e.target.value);}}
+                    rows={3}
+                    style={{width:'100%',background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'10px',color:'#cdd6f4',fontSize:'0.85em',resize:'vertical',boxSizing:'border-box',fontFamily:'inherit'}}
+                  />
+                  <div style={{display:'flex',gap:'8px',marginTop:'8px',alignItems:'center'}}>
+                    <input placeholder="Your name" value={clientName} onChange={e=>setClientName(e.target.value)}
+                      style={{background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'7px 10px',color:'#cdd6f4',fontSize:'0.8em',width:'140px'}}/>
+                    <button onClick={submitNote} disabled={noteSubmitting||!noteText.trim()}
+                      style={{background:'#89b4fa',color:'#1e1e2e',border:'none',borderRadius:'6px',padding:'7px 16px',fontSize:'0.82em',fontWeight:700,cursor:'pointer'}}>
+                      {noteSubmitting?'Sending...':noteSaved?'✅ Sent!':'Send Note'}
+                    </button>
+                  </div>
+                </div>
+
                 {selected.actions.length>0?selected.actions.map(a=>(
                   <div key={a.id} style={s.actionCard}>
                     <div style={s.actionMeta}>
@@ -355,6 +598,127 @@ export default function ProjectPage() {
                 )):<div style={s.noNotes}>No public notes on this task yet.</div>}
               </div>
             )}
+
+            {/* Bottom tabs: Scratchpad | Documents */}
+            <div style={{marginTop:'20px'}}>
+              <div style={{display:'flex',gap:'0',background:'#181825',borderRadius:'10px',padding:'4px',width:'fit-content',marginBottom:'16px'}} className="no-print">
+                <button onClick={()=>{setActiveTab('tasks');}} style={{...s.viewBtn,...(activeTab==='tasks'?{...s.viewBtnActive}:{})}}>📋 Tasks</button>
+                <button onClick={()=>{setActiveTab('scratchpad');loadScratchpad();}} style={{...s.viewBtn,...(activeTab==='scratchpad'?{...s.viewBtnActive}:{})}}>
+                  📝 Scratchpad {scratchpad.filter(i=>!i.done&&i.type==='todo').length>0&&<span style={{background:'#89b4fa',color:'#1e1e2e',borderRadius:'10px',padding:'1px 7px',fontSize:'0.75em',marginLeft:'4px'}}>{scratchpad.filter(i=>!i.done&&i.type==='todo').length}</span>}
+                </button>
+                <button onClick={()=>{setActiveTab('docs');loadDocs();}} style={{...s.viewBtn,...(activeTab==='docs'?{...s.viewBtnActive}:{})}}>📁 Documents</button>
+                <button onClick={()=>{setActiveTab('signoff');}} style={{...s.viewBtn,...(activeTab==='signoff'?{...s.viewBtnActive}:{})}}>✅ Sign-off</button>
+              </div>
+
+              {/* Scratchpad panel */}
+              {activeTab==='scratchpad'&&(
+                <div style={{background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'20px',marginBottom:'16px'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px',flexWrap:'wrap',gap:'10px'}}>
+                    <div>
+                      <h3 style={{color:'#cdd6f4',margin:'0 0 4px',fontSize:'1em'}}>📝 Session Scratchpad</h3>
+                      <p style={{color:'#6c7086',fontSize:'0.78em',margin:0}}>Shared with your consultant · Add things to cover, questions, or notes</p>
+                    </div>
+                    <input placeholder="Your name (optional)" value={clientName} onChange={e=>setClientName(e.target.value)}
+                      style={{background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'6px 12px',color:'#cdd6f4',fontSize:'0.8em',width:'160px'}}/>
+                  </div>
+
+                  {/* Add item row */}
+                  <div style={{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}}>
+                    <div style={{display:'flex',background:'#1e1e2e',borderRadius:'6px',padding:'2px',gap:'2px',flexShrink:0}}>
+                      <button onClick={()=>setNewItemType('todo')} style={{background:newItemType==='todo'?'#313244':'transparent',border:'none',color:newItemType==='todo'?'#cdd6f4':'#6c7086',borderRadius:'4px',padding:'5px 10px',fontSize:'0.75em',cursor:'pointer'}}>☐ To-do</button>
+                      <button onClick={()=>setNewItemType('note')} style={{background:newItemType==='note'?'#313244':'transparent',border:'none',color:newItemType==='note'?'#cdd6f4':'#6c7086',borderRadius:'4px',padding:'5px 10px',fontSize:'0.75em',cursor:'pointer'}}>📝 Note</button>
+                    </div>
+                    <input
+                      placeholder={newItemType==='todo'?"Add something to cover in the next session...":"Add a note or question..."}
+                      value={newItem} onChange={e=>setNewItem(e.target.value)}
+                      onKeyDown={e=>e.key==='Enter'&&addScratchItem()}
+                      style={{flex:1,minWidth:'200px',background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'8px 12px',color:'#cdd6f4',fontSize:'0.85em'}}/>
+                    <button onClick={addScratchItem} disabled={!newItem.trim()}
+                      style={{background:'#89b4fa',color:'#1e1e2e',border:'none',borderRadius:'6px',padding:'8px 16px',fontSize:'0.85em',fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>
+                      Add
+                    </button>
+                  </div>
+
+                  {/* Items list */}
+                  {scratchpad.length===0&&<div style={{color:'#45475a',fontSize:'0.85em',fontStyle:'italic',textAlign:'center',padding:'20px'}}>Nothing here yet — add your first item above</div>}
+                  {scratchpad.map(item=>(
+                    <div key={item.id} style={{display:'flex',alignItems:'flex-start',gap:'10px',padding:'10px 12px',background:item.done?'#1a1a2a':'#1e1e2e',borderRadius:'8px',marginBottom:'6px',opacity:item.done?0.6:1}}>
+                      {item.type==='todo'?(
+                        <button onClick={()=>scratchAction('toggle',{id:item.id})}
+                          style={{background:'none',border:'none',cursor:'pointer',fontSize:'1.1em',padding:'0',flexShrink:0,marginTop:'1px'}}>
+                          {item.done?'☑':'☐'}
+                        </button>
+                      ):<span style={{fontSize:'0.9em',flexShrink:0,marginTop:'2px'}}>📝</span>}
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:'0.85em',color:'#cdd6f4',textDecoration:item.done?'line-through':'none',lineHeight:1.4}}>{item.text}</div>
+                        <div style={{fontSize:'0.7em',color:'#45475a',marginTop:'3px'}}>{item.author==='admin'?'Consultant':'Client'} · {item.ts}</div>
+                      </div>
+                      <button onClick={()=>scratchAction('delete',{id:item.id})}
+                        style={{background:'none',border:'none',color:'#45475a',cursor:'pointer',fontSize:'1em',padding:'0',flexShrink:0}}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Documents panel */}
+              {activeTab==='docs'&&(
+                <div style={{background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'20px',marginBottom:'16px'}}>
+                  <h3 style={{color:'#cdd6f4',margin:'0 0 4px',fontSize:'1em'}}>📁 Document Library</h3>
+                  <p style={{color:'#6c7086',fontSize:'0.78em',margin:'0 0 16px'}}>Files attached to your project tasks in HaloPSA</p>
+                  {!docsLoaded&&<div style={{color:'#6c7086',textAlign:'center',padding:'20px'}}>Loading...</div>}
+                  {docsLoaded&&attachments.length===0&&<div style={{color:'#45475a',fontSize:'0.85em',fontStyle:'italic',textAlign:'center',padding:'20px'}}>No documents attached to project tasks yet</div>}
+                  {docsLoaded&&attachments.map(a=>(
+                    <div key={a.id} style={{display:'flex',alignItems:'center',gap:'12px',padding:'10px 14px',background:'#1e1e2e',borderRadius:'8px',marginBottom:'6px'}}>
+                      <span style={{fontSize:'1.2em'}}>📄</span>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:'0.85em',color:'#cdd6f4',fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.filename}</div>
+                        <div style={{fontSize:'0.72em',color:'#6c7086'}}>{a.date} {a.size>0?`· ${(a.size/1024).toFixed(0)}KB`:''}</div>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{marginTop:'12px',paddingTop:'12px',borderTop:'1px solid #313244'}}>
+                    <a href={`/api/p/ical?token=${query.token}`} download style={{display:'inline-flex',alignItems:'center',gap:'6px',background:'#313244',border:'1px solid #45475a',color:'#a6adc8',borderRadius:'6px',padding:'7px 14px',fontSize:'0.8em',textDecoration:'none'}}>
+                      📅 Download Calendar (.ics)
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Sign-off panel */}
+              {activeTab==='signoff'&&data&&(
+                <div style={{background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'20px',marginBottom:'16px'}}>
+                  <h3 style={{color:'#cdd6f4',margin:'0 0 4px',fontSize:'1em'}}>✅ Milestone Sign-off</h3>
+                  <p style={{color:'#6c7086',fontSize:'0.78em',margin:'0 0 12px'}}>Confirm completed milestones to record your approval in HaloPSA</p>
+                  <div style={{marginBottom:'12px'}}>
+                    <input placeholder="Your name" value={signoffName} onChange={e=>setSignoffName(e.target.value)}
+                      style={{background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'8px 12px',color:'#cdd6f4',fontSize:'0.85em',width:'200px',boxSizing:'border-box'}}/>
+                  </div>
+                  {data.milestones.map(ms=>{
+                    const msTasks=data.taskDetails.filter(t=>t.milestone===ms.name);
+                    const allDone=msTasks.length>0&&msTasks.every(t=>[9,16,21].includes(t.status_id));
+                    const done=signoffDone[ms.name];
+                    return(
+                      <div key={ms.name} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 16px',background:'#1e1e2e',borderRadius:'8px',marginBottom:'6px'}}>
+                        <div>
+                          <div style={{fontSize:'0.88em',color:'#cdd6f4',fontWeight:500}}>{ms.name}</div>
+                          <div style={{fontSize:'0.75em',color:'#6c7086'}}>{msTasks.length} tasks · {msTasks.filter(t=>[9,16,21].includes(t.status_id)).length} completed</div>
+                        </div>
+                        {done?(
+                          <span style={{fontSize:'0.8em',color:'#a6e3a1',fontWeight:600}}>✅ Approved</span>
+                        ):allDone?(
+                          <button onClick={()=>submitSignoff(ms.name)} disabled={!signoffName.trim()}
+                            style={{background:'#a6e3a1',color:'#1e1e2e',border:'none',borderRadius:'6px',padding:'7px 16px',fontSize:'0.8em',fontWeight:700,cursor:signoffName.trim()?'pointer':'not-allowed',opacity:signoffName.trim()?1:0.5}}>
+                            Approve ✓
+                          </button>
+                        ):(
+                          <span style={{fontSize:'0.75em',color:'#45475a'}}>Not complete</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <footer style={s.footer}>
               <span>Powered by <strong>Sondela Consulting</strong> · Live HaloPSA Data</span>

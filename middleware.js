@@ -19,6 +19,11 @@ export async function middleware(req) {
     pathname.startsWith('/client/') ||     // client overview pages
     pathname.startsWith('/login') ||
     pathname.startsWith('/api/p/') ||      // public project API (token-verified internally)
+    pathname.startsWith('/api/collab/') ||  // collaboration (token-verified internally)
+    pathname.startsWith('/api/ical/') ||    // iCal feed (token-verified internally)
+    pathname.startsWith('/api/attachments/') || // attachments (token-verified internally)
+    pathname.startsWith('/certificate/') || // completion certificate (public)
+    pathname.startsWith('/proposal/') ||    // proposal mode (public)
     pathname.startsWith('/api/auth/') ||
     pathname.startsWith('/api/project/') ||
     pathname.startsWith('/_next/')
