@@ -676,9 +676,9 @@ function LinkMgrModal({ project, initialMeta, onClose }) {
 
         {/* Next Session */}
         <div style={{background:'#1e1e2e',borderRadius:'10px',padding:'16px',marginBottom:'14px'}}>
-          <div style={{fontSize:'0.88em',color:'#cdd6f4',fontWeight:600,marginBottom:'3px'}}>Next Session</div>
+          <div style={{fontSize:'0.88em',color:'#cdd6f4',fontWeight:600,marginBottom:'3px'}}>📅 Next Session</div>
           <div style={{fontSize:'0.76em',color:'#6c7086',marginBottom:'10px'}}>
-            Shown on the client portal. Overrides the auto-detected date from HaloPSA.
+            Shown on the client portal as a banner. Set the date, label, and agenda so clients know what to expect.
           </div>
           <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
             <input placeholder="Session label e.g. Session 05 – Billing Templates"
@@ -694,9 +694,11 @@ function LinkMgrModal({ project, initialMeta, onClose }) {
                 </button>
               )}
             </div>
-            <input placeholder="Optional notes (shown to client)"
+            <textarea placeholder="Session agenda — what will be covered, who should attend...&#10;e.g.&#10;• Review billing template setup&#10;• Walk through SLA configuration&#10;• Q&A on contract structure"
               value={nsNotes} onChange={e=>setNsNotes(e.target.value)}
-              style={{background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'8px 12px',color:'#cdd6f4',fontSize:'0.82em',width:'100%',boxSizing:'border-box'}}/>
+              rows={5}
+              style={{background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'8px 12px',color:'#cdd6f4',fontSize:'0.82em',width:'100%',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit',lineHeight:1.5}}/>
+            <div style={{fontSize:'0.72em',color:'#45475a',marginTop:'2px'}}>This agenda is shown to the client so they can decide who needs to attend</div>
           </div>
         </div>
 

@@ -51,7 +51,8 @@ export default function ProjectPage() {
   const [collapsed, setCollapsed]     = useState({});
   const [pctMode, setPctMode]         = useState('hours');
   const [activeTab, setActiveTab] = useState('gantt');
-  const [notesOpen, setNotesOpen]   = useState(false);
+  const [notesOpen, setNotesOpen]       = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   function switchTab(t) {
     setActiveTab(t);
     if (typeof window !== 'undefined') localStorage.setItem('sondela_tab', t);
@@ -321,6 +322,37 @@ export default function ProjectPage() {
               <button onClick={()=>{switchTab('docs');loadDocs();}} style={{...s.viewBtn,...(activeTab==='docs'?{...s.viewBtnActive,borderBottomColor:'#89b4fa',color:'#89b4fa'}:{})}}>📁 Documents</button>
               <button onClick={()=>switchTab('signoff')} style={{...s.viewBtn,...(activeTab==='signoff'?{...s.viewBtnActive,borderBottomColor:'#a6e3a1',color:'#a6e3a1'}:{})}}>✅ Sign-off</button>
             </div>
+
+            {/* Next Session Banner */}
+            {data.nextSession && !bannerDismissed && (
+              <div style={{background:'linear-gradient(135deg,#1e2e4a,#252545)',border:'1px solid #89b4fa40',borderLeft:'4px solid #89b4fa',borderRadius:'12px',padding:'16px 20px',marginBottom:'16px',animation:'fadeUp 0.3s ease'}} className="print-section">
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'12px'}}>
+                  <div style={{flex:1}}>
+                    <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'6px',flexWrap:'wrap'}}>
+                      <span style={{fontSize:'0.75em',color:'#89b4fa',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em'}}>📅 Next Session</span>
+                      <span style={{fontSize:'0.82em',color:'#cdd6f4',fontWeight:600}}>{data.nextSession.summary}</span>
+                      {data.nextSession.startdate && (
+                        <span style={{fontSize:'0.8em',color:'#a6adc8',background:'#313244',borderRadius:'20px',padding:'2px 12px'}}>
+                          {new Date(data.nextSession.startdate).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
+                        </span>
+                      )}
+                    </div>
+                    {data.nextSession.notes && (
+                      <div style={{marginTop:'10px'}}>
+                        <div style={{fontSize:'0.72em',color:'#6c7086',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:'6px'}}>Session Agenda</div>
+                        <div style={{fontSize:'0.83em',color:'#a6adc8',lineHeight:1.6,whiteSpace:'pre-wrap',background:'#1e1e2e',borderRadius:'8px',padding:'10px 14px'}}>
+                          {data.nextSession.notes}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={()=>setBannerDismissed(true)} className="no-print"
+                    style={{background:'none',border:'none',color:'#45475a',cursor:'pointer',fontSize:'1.2em',padding:'0 4px',flexShrink:0,lineHeight:1}}>
+                    ×
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Stats */}
             <div style={s.stats} className="print-section">
