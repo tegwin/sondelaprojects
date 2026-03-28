@@ -63,12 +63,7 @@ export default function ProjectPage() {
   const [signoffDone, setSignoffDone] = useState({});
   const [attachments, setAttachments] = useState([]);
   const [docsLoaded, setDocsLoaded] = useState(false);
-  const [collabItems, setCollabItems] = useState([]);
-  const [collabText, setCollabText]   = useState('');
-  const [collabSaving, setCollabSaving] = useState(false);
-  const [attachments, setAttachments] = useState([]);
-  const [activePanel, setActivePanel] = useState(null); // 'collab'|'docs'|'report'|null
-  const [signoffs, setSignoffs]       = useState({});   // milestoneName -> signed
+
 
   function toggleCollapse(name) { setCollapsed(p => ({...p, [name]: !p[name]})); }
 
