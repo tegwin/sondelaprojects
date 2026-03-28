@@ -99,11 +99,9 @@ export default function Home() {
       `}</style>
 
       <div style={s.page}>
-        {/* Header */}
         <header style={s.header}>
           <div style={s.hInner}>
             <div style={{display:'flex',alignItems:'center',gap:'14px'}}>
-              {/* Sondela Logo */}
               <div style={s.logoMark}>
                 <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
                   <rect width="36" height="36" rx="8" fill="#89b4fa"/>
@@ -125,7 +123,7 @@ export default function Home() {
               <button onClick={()=>{setPage('health');if(!healthData.length)fetchHealth();}} style={{background:page==='health'?'#45475a':'transparent',border:'none',color:page==='health'?'#cdd6f4':'#6c7086',padding:'6px 14px',borderRadius:'6px',cursor:'pointer',fontSize:'0.82em',fontWeight:page==='health'?700:400}}>
                 🏥 Health
               </button>
-              <button onClick={()=>{setPage('report');}} style={{background:page==='report'?'#45475a':'transparent',border:'none',color:page==='report'?'#cdd6f4':'#6c7086',padding:'6px 14px',borderRadius:'6px',cursor:'pointer',fontSize:'0.82em',fontWeight:page==='report'?700:400}}>
+              <button onClick={()=>setPage('report')} style={{background:page==='report'?'#45475a':'transparent',border:'none',color:page==='report'?'#cdd6f4':'#6c7086',padding:'6px 14px',borderRadius:'6px',cursor:'pointer',fontSize:'0.82em',fontWeight:page==='report'?700:400}}>
                 📊 Reports
               </button>
             </div>
@@ -133,228 +131,179 @@ export default function Home() {
           </div>
         </header>
 
-        <main style={s.main}>
-          {page === 'projects' && <main style={s.main}>
-          <div style={s.controls}>
-            <input
-              style={s.search}
-              type="text"
-              placeholder="Search projects or clients..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-            <div style={s.tabs}>
-              <button style={{...s.tab,...(groupBy==='client'?s.tabActive:{})}} onClick={()=>setGroupBy('client')}>By Client</button>
-              <button style={{...s.tab,...(groupBy==='all'?s.tabActive:{})}} onClick={()=>setGroupBy('all')}>All Projects</button>
-            </div>
-            <span style={s.count}>{loading ? '...' : `${filtered.length} projects`}</span>
-          </div>
-
-          {error && <div style={s.errBox}>⚠️ {error}</div>}
-
-          {loading && (
-            <div style={s.grid}>
-              {[1,2,3,4,5,6].map(i=><div key={i} style={s.skeleton}/>)}
-            </div>
-          )}
-
-          {/* Grouped by client */}
-          {!loading && groupBy === 'client' && (
-            Object.values(grouped).map((group, gi) => (
-              <div key={gi} style={s.clientGroup}>
-                <div style={s.clientHeader}>
-                  <div style={{...s.clientDot, background: group.colour}}/>
-                  <a href={`/client/${Object.keys(grouped)[gi]}`} style={s.clientName}>
-                    {group.name}
-                  </a>
-                  <span style={s.clientCount}>{group.projects.length} project{group.projects.length!==1?'s':''}</span>
-                </div>
-                <div style={s.grid}>
-                  {group.projects.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} onLinkMgr={openLinkMgr} onQuickAction={(p,t)=>setQuickAction({project:p,type:t})} shareUrl={getShareUrl(p)} statusColour={statusColour} statusLabel={statusLabel}/>)}
-                </div>
+        {/* ── PROJECTS PAGE ── */}
+        {page === 'projects' && (
+          <main style={s.main}>
+            <div style={s.controls}>
+              <input
+                style={s.search}
+                type="text"
+                placeholder="Search projects or clients..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+              <div style={s.tabs}>
+                <button style={{...s.tab,...(groupBy==='client'?s.tabActive:{})}} onClick={()=>setGroupBy('client')}>By Client</button>
+                <button style={{...s.tab,...(groupBy==='all'?s.tabActive:{})}} onClick={()=>setGroupBy('all')}>All Projects</button>
               </div>
-            ))
-          )}
-
-          {/* Flat list */}
-          {!loading && groupBy === 'all' && (
-            <div style={s.grid}>
-              {filtered.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} onLinkMgr={openLinkMgr} onQuickAction={(p,t)=>setQuickAction({project:p,type:t})} shareUrl={getShareUrl(p)} statusColour={statusColour} statusLabel={statusLabel}/>)}
-              {filtered.length === 0 && <p style={s.empty}>No projects match your search.</p>}
+              <span style={s.count}>{loading ? '...' : `${filtered.length} projects`}</span>
             </div>
-          )}
-          </main>}
-      </div>
 
-      {/* Health Dashboard */}
-      {page === 'health' && (
-        <div style={{maxWidth:'1300px',margin:'0 auto',padding:'28px'}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'20px'}}>
-            <h2 style={{color:'#cdd6f4',margin:0,fontSize:'1.1em'}}>🏥 Project Health Dashboard</h2>
-            <button onClick={fetchHealth} style={{background:'#313244',border:'1px solid #45475a',color:'#cdd6f4',borderRadius:'6px',padding:'7px 14px',fontSize:'0.82em',cursor:'pointer'}}>
-              {healthLoading?'Loading...':'⟳ Refresh'}
-            </button>
-          </div>
-          {healthLoading&&<div style={{color:'#6c7086',textAlign:'center',padding:'40px'}}>Loading project health data...</div>}
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:'14px'}}>
-            {healthData.map(p=>{
-              const ragCol = p.rag?.status==='green'?'#a6e3a1':p.rag?.status==='red'?'#f38ba8':'#f9e2af';
-              const pctH   = p.budget ? Math.min(100,Math.round((p.hours/p.budget)*100)) : null;
-              return (
-                <div key={p.id} style={{background:'#252535',border:`1px solid ${p.client_colour}40`,borderRadius:'12px',overflow:'hidden'}}>
-                  <div style={{height:'3px',background:p.client_colour,width:'100%'}}></div>
-                  <div style={{padding:'14px 16px'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'8px'}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:'0.72em',color:p.client_colour,fontWeight:600,marginBottom:'3px'}}>{p.client_name}</div>
-                        <div style={{fontSize:'0.85em',color:'#cdd6f4',fontWeight:600,lineHeight:1.3}}>{p.summary}</div>
-                      </div>
-                      <span style={{flexShrink:0,marginLeft:'8px',display:'inline-flex',alignItems:'center',gap:'5px',background:ragCol+'22',border:`1px solid ${ragCol}40`,borderRadius:'12px',padding:'3px 10px',fontSize:'0.72em',color:ragCol,fontWeight:600}}>
-                        <span style={{width:'6px',height:'6px',borderRadius:'50%',background:ragCol,display:'inline-block'}}></span>
-                        {p.rag?.label}
-                      </span>
-                    </div>
-                    {/* Progress */}
-                    <div style={{marginBottom:'10px'}}>
-                      <div style={{height:'6px',background:'#1e1e2e',borderRadius:'3px',marginBottom:'4px'}}>
-                        <div style={{height:'6px',background:p.client_colour,width:`${p.pct}%`,borderRadius:'3px',transition:'width 0.3s'}}></div>
-                      </div>
-                      <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72em',color:'#6c7086'}}>
-                        <span>{p.pct}% · {p.done}/{p.total} tasks</span>
-                        <span style={{color:'#fab387'}}>{p.hours.toFixed(1)}h{p.budget?` / ${p.budget}h`:''}</span>
-                      </div>
-                    </div>
-                    {/* Burn rate */}
-                    {p.projected&&(
-                      <div style={{fontSize:'0.75em',color:p.projected>p.budget?'#f38ba8':'#a6adc8',marginBottom:'8px'}}>
-                        🔥 Projected: {p.projected}h{p.budget?` of ${p.budget}h budget`:''}
-                        {p.projected>p.budget?' ⚠️ Over budget':''}
-                      </div>
-                    )}
-                    {/* Next session */}
-                    {p.nextSession&&(
-                      <div style={{fontSize:'0.75em',color:'#89b4fa',marginBottom:'8px'}}>
-                        📅 Next: {p.nextSession.summary} · {p.nextSession.startdate}
-                      </div>
-                    )}
-                    {/* Views */}
-                    <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72em',color:'#45475a'}}>
-                      <span>👁 {p.views} view{p.views!==1?'s':''}</span>
-                      <span style={{color:p.linkStatus==='active'?'#a6e3a1':p.linkStatus==='revoked'?'#f38ba8':'#f9e2af'}}>
-                        {p.linkStatus==='active'?'✅ Active':p.linkStatus==='revoked'?'🔒 Revoked':'⏰ Expired'}
-                      </span>
-                    </div>
-                    <a href={`/p/${p.token}`} target="_blank" rel="noreferrer"
-                      style={{display:'block',marginTop:'10px',background:'#313244',border:'1px solid #45475a',color:'#a6adc8',borderRadius:'6px',padding:'6px',fontSize:'0.78em',textAlign:'center',textDecoration:'none'}}>
-                      View Portal →
-                    </a>
+            {error && <div style={s.errBox}>⚠️ {error}</div>}
+
+            {loading && (
+              <div style={s.grid}>
+                {[1,2,3,4,5,6].map(i=><div key={i} style={s.skeleton}/>)}
+              </div>
+            )}
+
+            {!loading && groupBy === 'client' && (
+              Object.values(grouped).map((group, gi) => (
+                <div key={gi} style={s.clientGroup}>
+                  <div style={s.clientHeader}>
+                    <div style={{...s.clientDot, background: group.colour}}></div>
+                    <a href={`/client/${Object.keys(grouped)[gi]}`} style={s.clientName}>{group.name}</a>
+                    <span style={s.clientCount}>{group.projects.length} project{group.projects.length!==1?'s':''}</span>
+                  </div>
+                  <div style={s.grid}>
+                    {group.projects.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} onLinkMgr={openLinkMgr} onQuickAction={(p,t)=>setQuickAction({project:p,type:t})} shareUrl={getShareUrl(p)} statusColour={statusColour} statusLabel={statusLabel}/>)}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+              ))
+            )}
 
-      {/* Reports Page */}
-      {page === 'report' && (
-        <div style={{maxWidth:'900px',margin:'0 auto',padding:'28px'}}>
-          <h2 style={{color:'#cdd6f4',marginBottom:'20px',fontSize:'1.1em'}}>📊 Reports</h2>
-          <div style={{background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'24px',marginBottom:'16px'}}>
-            <h3 style={{color:'#89b4fa',margin:'0 0 8px',fontSize:'1em'}}>📋 Weekly Status Report</h3>
-            <p style={{color:'#6c7086',fontSize:'0.85em',margin:'0 0 16px'}}>Generate a formatted status report across all active projects</p>
-            <button onClick={()=>{
-              const w = window.open('','_blank');
-              const rows = projects.filter(p=>p.status_id!==9).map(p=>
-                `<tr><td>${p.client_name}</td><td>${p.summary}</td><td>${p.pct_complete}%</td><td>${p.done_tasks}/${p.total_tasks}</td><td>${p.hours_logged.toFixed(1)}h</td></tr>`
-              ).join('');
-              w.document.write(`
-                <html><head><title>Weekly Status Report - ${new Date().toLocaleDateString('en-GB')}</title>
-                <style>body{font-family:Arial;padding:30px;max-width:900px;margin:0 auto}h1{color:#1e1e2e}table{width:100%;border-collapse:collapse}th,td{padding:10px;border:1px solid #ddd;text-align:left}th{background:#1e1e2e;color:#fff}tr:nth-child(even){background:#f5f5f5}@media print{.no-print{display:none}}</style>
-                </head><body>
-                <h1>Weekly Status Report</h1><p>Generated: ${new Date().toLocaleDateString('en-GB')} by Sondela Consulting</p>
-                <button class="no-print" onclick="window.print()" style="margin-bottom:20px;padding:8px 16px;background:#1e1e2e;color:#fff;border:none;border-radius:4px;cursor:pointer">🖨 Print</button>
-                <table><thead><tr><th>Client</th><th>Project</th><th>Progress</th><th>Tasks</th><th>Hours</th></tr></thead>
-                <tbody>${rows}</tbody></table>
-                </body></html>
-              `);
-              w.document.close();
-            }} style={{background:'#89b4fa',color:'#1e1e2e',border:'none',borderRadius:'8px',padding:'10px 20px',fontSize:'0.88em',fontWeight:700,cursor:'pointer'}}>
-              Generate Report
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Quick Action Modal (note/time/summary) */}
-      {quickAction && (
-        <QuickActionModal
-          project={quickAction.project}
-          type={quickAction.type}
-          onClose={()=>setQuickAction(null)}
-        />
-      )}
-
-      {/* Link Manager Page */}
-      {page === 'links' && (
-        <div style={{maxWidth:'1300px',margin:'0 auto',padding:'28px'}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'20px'}}>
-            <h2 style={{color:'#cdd6f4',margin:0,fontSize:'1.1em'}}>🔐 Link Manager</h2>
-            <button onClick={fetchLinks} style={{background:'#313244',border:'1px solid #45475a',color:'#cdd6f4',borderRadius:'6px',padding:'7px 14px',fontSize:'0.82em',cursor:'pointer'}}>
-              {linksLoading?'Loading...':'⟳ Refresh'}
-            </button>
-          </div>
-          <div style={{background:'#313244',border:'1px solid #45475a',borderRadius:'12px',overflow:'hidden'}}>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 160px 80px 100px 120px 100px',gap:'0',background:'#181825',padding:'10px 16px',borderBottom:'1px solid #45475a',fontSize:'0.72em',color:'#6c7086',textTransform:'uppercase',letterSpacing:'0.05em'}}>
-              <div>Project</div><div>Status</div><div>Views</div><div>First Viewed</div><div>Expires</div><div>Actions</div>
-            </div>
-            {linksLoading&&<div style={{padding:'30px',textAlign:'center',color:'#6c7086'}}>Loading link data...</div>}
-            {!linksLoading&&linkData.map((l,i)=>(
-              <div key={l.id} style={{display:'grid',gridTemplateColumns:'1fr 160px 80px 100px 120px 100px',gap:'0',padding:'12px 16px',borderBottom:'1px solid #313244',background:i%2===0?'#252535':'#1e1e2e',alignItems:'center'}}>
-                <div>
-                  <div style={{fontSize:'0.85em',color:'#cdd6f4',fontWeight:500}}>{l.summary}</div>
-                  <div style={{fontSize:'0.72em',color:'#6c7086'}}>{l.client_name}</div>
-                </div>
-                <div>
-                  <span style={{
-                    fontSize:'0.75em',padding:'3px 10px',borderRadius:'10px',fontWeight:600,
-                    background:l.status==='active'?'#1e3a2e':l.status==='revoked'?'#2e1e1e':'#2e2e1e',
-                    color:l.status==='active'?'#a6e3a1':l.status==='revoked'?'#f38ba8':'#f9e2af',
-                  }}>
-                    {l.status==='active'?'✅ Active':l.status==='revoked'?'🔒 Revoked':'⏰ Expired'}
-                  </span>
-                </div>
-                <div style={{fontSize:'0.82em',color:l.views>0?'#89b4fa':'#45475a',fontWeight:l.views>0?700:400}}>
-                  {l.views>0?`${l.views} view${l.views>1?'s':''}`:'—'}
-                </div>
-                <div style={{fontSize:'0.75em',color:'#6c7086'}}>{l.firstView?l.firstView.substring(0,10):'—'}</div>
-                <div style={{fontSize:'0.75em',color:l.expired?'#f38ba8':'#6c7086'}}>{l.expiresAt?l.expiresAt.substring(0,10):'No expiry'}</div>
-                <div>
-                  <button onClick={()=>openLinkMgr({...l,token:l.token,client_colour:'#89b4fa'})}
-                    style={{background:'#45475a',border:'none',color:'#cdd6f4',borderRadius:'6px',padding:'5px 10px',fontSize:'0.75em',cursor:'pointer'}}>
-                    Manage
-                  </button>
-                </div>
+            {!loading && groupBy === 'all' && (
+              <div style={s.grid}>
+                {filtered.map(p => <ProjectCard key={p.id} p={p} copied={copied} onCopy={copyLink} onEmail={openEmail} onLinkMgr={openLinkMgr} onQuickAction={(p,t)=>setQuickAction({project:p,type:t})} shareUrl={getShareUrl(p)} statusColour={statusColour} statusLabel={statusLabel}/>)}
+                {filtered.length === 0 && <p style={s.empty}>No projects match your search.</p>}
               </div>
-            ))}
-            {!linksLoading&&linkData.length===0&&<div style={{padding:'30px',textAlign:'center',color:'#6c7086'}}>No link data yet. Links are tracked once created.</div>}
+            )}
+          </main>
+        )}
+
+        {/* ── HEALTH PAGE ── */}
+        {page === 'health' && (
+          <div style={{maxWidth:'1300px',margin:'0 auto',padding:'28px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'20px'}}>
+              <h2 style={{color:'#cdd6f4',margin:0,fontSize:'1.1em'}}>🏥 Project Health Dashboard</h2>
+              <button onClick={fetchHealth} style={{background:'#313244',border:'1px solid #45475a',color:'#cdd6f4',borderRadius:'6px',padding:'7px 14px',fontSize:'0.82em',cursor:'pointer'}}>
+                {healthLoading?'Loading...':'⟳ Refresh'}
+              </button>
+            </div>
+            {healthLoading&&<div style={{color:'#6c7086',textAlign:'center',padding:'40px'}}>Loading project health data...</div>}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:'14px'}}>
+              {healthData.map(p=>{
+                const ragCol = p.rag?.status==='green'?'#a6e3a1':p.rag?.status==='red'?'#f38ba8':'#f9e2af';
+                return (
+                  <div key={p.id} style={{background:'#252535',border:`1px solid ${p.client_colour}40`,borderRadius:'12px',overflow:'hidden'}}>
+                    <div style={{height:'3px',background:p.client_colour,width:'100%'}}></div>
+                    <div style={{padding:'14px 16px'}}>
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'8px'}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:'0.72em',color:p.client_colour,fontWeight:600,marginBottom:'3px'}}>{p.client_name}</div>
+                          <div style={{fontSize:'0.85em',color:'#cdd6f4',fontWeight:600,lineHeight:1.3}}>{p.summary}</div>
+                        </div>
+                        <span style={{flexShrink:0,marginLeft:'8px',display:'inline-flex',alignItems:'center',gap:'5px',background:ragCol+'22',border:`1px solid ${ragCol}40`,borderRadius:'12px',padding:'3px 10px',fontSize:'0.72em',color:ragCol,fontWeight:600}}>
+                          <span style={{width:'6px',height:'6px',borderRadius:'50%',background:ragCol,display:'inline-block'}}></span>
+                          {p.rag?.label}
+                        </span>
+                      </div>
+                      <div style={{marginBottom:'10px'}}>
+                        <div style={{height:'6px',background:'#1e1e2e',borderRadius:'3px',marginBottom:'4px'}}>
+                          <div style={{height:'6px',background:p.client_colour,width:`${p.pct}%`,borderRadius:'3px'}}></div>
+                        </div>
+                        <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72em',color:'#6c7086'}}>
+                          <span>{p.pct}% · {p.done}/{p.total} tasks</span>
+                          <span style={{color:'#fab387'}}>{p.hours.toFixed(1)}h{p.budget?` / ${p.budget}h`:''}</span>
+                        </div>
+                      </div>
+                      {p.projected&&<div style={{fontSize:'0.75em',color:p.projected>p.budget?'#f38ba8':'#a6adc8',marginBottom:'8px'}}>🔥 Projected: {p.projected}h{p.budget?` of ${p.budget}h`:''}{p.projected>p.budget?' ⚠️':''}</div>}
+                      {p.nextSession&&<div style={{fontSize:'0.75em',color:'#89b4fa',marginBottom:'8px'}}>📅 Next: {p.nextSession.summary} · {p.nextSession.startdate}</div>}
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72em',color:'#45475a'}}>
+                        <span>👁 {p.views} view{p.views!==1?'s':''}</span>
+                        <span style={{color:p.linkStatus==='active'?'#a6e3a1':p.linkStatus==='revoked'?'#f38ba8':'#f9e2af'}}>
+                          {p.linkStatus==='active'?'✅ Active':p.linkStatus==='revoked'?'🔒 Revoked':'⏰ Expired'}
+                        </span>
+                      </div>
+                      <a href={`/p/${p.token}`} target="_blank" rel="noreferrer"
+                        style={{display:'block',marginTop:'10px',background:'#313244',border:'1px solid #45475a',color:'#a6adc8',borderRadius:'6px',padding:'6px',fontSize:'0.78em',textAlign:'center',textDecoration:'none'}}>
+                        View Portal →
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Email modal */}
-      {emailModal && (
-        <EmailModal project={emailModal} onSend={sendEmail} onClose={()=>setEmailModal(null)}/>
-      )}
+        {/* ── REPORTS PAGE ── */}
+        {page === 'report' && (
+          <div style={{maxWidth:'900px',margin:'0 auto',padding:'28px'}}>
+            <h2 style={{color:'#cdd6f4',marginBottom:'20px',fontSize:'1.1em'}}>📊 Reports</h2>
+            <div style={{background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'24px',marginBottom:'16px'}}>
+              <h3 style={{color:'#89b4fa',margin:'0 0 8px',fontSize:'1em'}}>📋 Weekly Status Report</h3>
+              <p style={{color:'#6c7086',fontSize:'0.85em',margin:'0 0 16px'}}>Generate a formatted status report across all active projects</p>
+              <button onClick={()=>{
+                const w = window.open('','_blank');
+                const rows = projects.filter(p=>p.status_id!==9).map(p=>
+                  `<tr><td>${p.client_name}</td><td>${p.summary}</td><td>${p.pct_complete}%</td><td>${p.done_tasks}/${p.total_tasks}</td><td>${p.hours_logged.toFixed(1)}h</td></tr>`
+                ).join('');
+                w.document.write(`<html><head><title>Weekly Status Report - ${new Date().toLocaleDateString('en-GB')}</title><style>body{font-family:Arial;padding:30px;max-width:900px;margin:0 auto}table{width:100%;border-collapse:collapse}th,td{padding:10px;border:1px solid #ddd;text-align:left}th{background:#1e1e2e;color:#fff}@media print{.no-print{display:none}}</style></head><body><h1>Weekly Status Report</h1><p>Generated: ${new Date().toLocaleDateString('en-GB')} by Sondela Consulting</p><button class="no-print" onclick="window.print()" style="margin-bottom:20px;padding:8px 16px;background:#1e1e2e;color:#fff;border:none;border-radius:4px;cursor:pointer">🖨 Print</button><table><thead><tr><th>Client</th><th>Project</th><th>Progress</th><th>Tasks</th><th>Hours</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+                w.document.close();
+              }} style={{background:'#89b4fa',color:'#1e1e2e',border:'none',borderRadius:'8px',padding:'10px 20px',fontSize:'0.88em',fontWeight:700,cursor:'pointer'}}>
+                Generate Report
+              </button>
+            </div>
+          </div>
+        )}
 
-      {/* Link manager modal */}
-      {linkMgr && (
-        <LinkMgrModal
-          project={linkMgr.project}
-          initialMeta={linkMgr.meta}
-          onClose={()=>setLinkMgr(null)}
-        />
-      )}
+        {/* ── LINK MANAGER PAGE ── */}
+        {page === 'links' && (
+          <div style={{maxWidth:'1300px',margin:'0 auto',padding:'28px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'20px'}}>
+              <h2 style={{color:'#cdd6f4',margin:0,fontSize:'1.1em'}}>🔐 Link Manager</h2>
+              <button onClick={fetchLinks} style={{background:'#313244',border:'1px solid #45475a',color:'#cdd6f4',borderRadius:'6px',padding:'7px 14px',fontSize:'0.82em',cursor:'pointer'}}>
+                {linksLoading?'Loading...':'⟳ Refresh'}
+              </button>
+            </div>
+            <div style={{background:'#313244',border:'1px solid #45475a',borderRadius:'12px',overflow:'hidden'}}>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 160px 80px 100px 120px 100px',gap:'0',background:'#181825',padding:'10px 16px',borderBottom:'1px solid #45475a',fontSize:'0.72em',color:'#6c7086',textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                <div>Project</div><div>Status</div><div>Views</div><div>First Viewed</div><div>Expires</div><div>Actions</div>
+              </div>
+              {linksLoading&&<div style={{padding:'30px',textAlign:'center',color:'#6c7086'}}>Loading link data...</div>}
+              {!linksLoading&&linkData.map((l,i)=>(
+                <div key={l.id} style={{display:'grid',gridTemplateColumns:'1fr 160px 80px 100px 120px 100px',gap:'0',padding:'12px 16px',borderBottom:'1px solid #313244',background:i%2===0?'#252535':'#1e1e2e',alignItems:'center'}}>
+                  <div>
+                    <div style={{fontSize:'0.85em',color:'#cdd6f4',fontWeight:500}}>{l.summary}</div>
+                    <div style={{fontSize:'0.72em',color:'#6c7086'}}>{l.client_name}</div>
+                  </div>
+                  <div>
+                    <span style={{fontSize:'0.75em',padding:'3px 10px',borderRadius:'10px',fontWeight:600,background:l.status==='active'?'#1e3a2e':l.status==='revoked'?'#2e1e1e':'#2e2e1e',color:l.status==='active'?'#a6e3a1':l.status==='revoked'?'#f38ba8':'#f9e2af'}}>
+                      {l.status==='active'?'✅ Active':l.status==='revoked'?'🔒 Revoked':'⏰ Expired'}
+                    </span>
+                  </div>
+                  <div style={{fontSize:'0.82em',color:l.views>0?'#89b4fa':'#45475a',fontWeight:l.views>0?700:400}}>{l.views>0?`${l.views} view${l.views>1?'s':''}` :'—'}</div>
+                  <div style={{fontSize:'0.75em',color:'#6c7086'}}>{l.firstView?l.firstView.substring(0,10):'—'}</div>
+                  <div style={{fontSize:'0.75em',color:l.expired?'#f38ba8':'#6c7086'}}>{l.expiresAt?l.expiresAt.substring(0,10):'No expiry'}</div>
+                  <div>
+                    <button onClick={()=>openLinkMgr({...l,token:l.token,client_colour:'#89b4fa'})}
+                      style={{background:'#45475a',border:'none',color:'#cdd6f4',borderRadius:'6px',padding:'5px 10px',fontSize:'0.75em',cursor:'pointer'}}>
+                      Manage
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {!linksLoading&&linkData.length===0&&<div style={{padding:'30px',textAlign:'center',color:'#6c7086'}}>No link data yet.</div>}
+            </div>
+          </div>
+        )}
+
+        {/* ── MODALS ── */}
+        {emailModal && <EmailModal project={emailModal} onSend={sendEmail} onClose={()=>setEmailModal(null)}/>}
+        {linkMgr && <LinkMgrModal project={linkMgr.project} initialMeta={linkMgr.meta} onClose={()=>setLinkMgr(null)}/>}
+        {quickAction && <QuickActionModal project={quickAction.project} type={quickAction.type} onClose={()=>setQuickAction(null)}/>}
+      </div>
     </>
   );
 }
