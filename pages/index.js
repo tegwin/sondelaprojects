@@ -134,8 +134,7 @@ export default function Home() {
         </header>
 
         <main style={s.main}>
-          {page === 'projects' && <>
-          {/* Controls row */}
+          {page === 'projects' && <main style={s.main}>
           <div style={s.controls}>
             <input
               style={s.search}
@@ -184,11 +183,8 @@ export default function Home() {
               {filtered.length === 0 && <p style={s.empty}>No projects match your search.</p>}
             </div>
           )}
-        </main>
+          </main>}
       </div>
-
-          </>
-          }
 
       {/* Health Dashboard */}
       {page === 'health' && (
