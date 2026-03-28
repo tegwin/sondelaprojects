@@ -19,9 +19,9 @@ function statusStyle(sid) {
 function RAGBadge({ rag }) {
   if (!rag) return null;
   const map = {
-    green: { bg:'#1e3a2e', color:'#a6e3a1', dot:'#a6e3a1', icon:'🟢' },
-    amber: { bg:'#2e2a1e', color:'#f9e2af', dot:'#f9e2af', icon:'🟡' },
-    red:   { bg:'#2e1e1e', color:'#f38ba8', dot:'#f38ba8', icon:'🔴' },
+    green: { bg:'#1e3a2e', color:'#a6e3a1', dot:'#a6e3a1' },
+    amber: { bg:'#2e2a1e', color:'#f9e2af', dot:'#f9e2af' },
+    red:   { bg:'#2e1e1e', color:'#f38ba8', dot:'#f38ba8' },
   };
   const style = map[rag.status] || map.green;
   return (
@@ -33,36 +33,70 @@ function RAGBadge({ rag }) {
 }
 
 export default function ProjectPage() {
-  const { query }               = useRouter();
+  const { query } = useRouter();
+
+  // ── Core state ──────────────────────────────────────────────────────────────
   const [data, setData]         = useState(null);
   const [error, setError]       = useState(null);
   const [loading, setLoading]   = useState(true);
   const [lastFetch, setLastFetch] = useState(null);
-  const [view, setView]         = useState(() => {
+
+  // ── View state ──────────────────────────────────────────────────────────────
+  const [view, setView] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem('sondela_view') || 'gantt';
     return 'gantt';
   });
-  const [selected, setSelected]   = useState(null);
+  const [selected, setSelected]       = useState(null);
   const [hideCompleted, setHideCompleted] = useState(false);
-  const [collapsed, setCollapsed]   = useState({});
-  const [pctMode, setPctMode]       = useState('hours');
-  const [activeTab, setActiveTab]   = useState('tasks');
-  const [scratchpad, setScratchpad] = useState([]);
+  const [collapsed, setCollapsed]     = useState({});
+  const [pctMode, setPctMode]         = useState('hours');
+  const [activeTab, setActiveTab]     = useState('tasks');
+
+  // ── Scratchpad state ────────────────────────────────────────────────────────
+  const [scratchpad, setScratchpad]       = useState([]);
   const [scratchLoaded, setScratchLoaded] = useState(false);
-  const [newItem, setNewItem]       = useState('');
-  const [newItemType, setNewItemType] = useState('todo');
-  const [clientName, setClientName] = useState('');
-  const [noteTicketId, setNoteTicketId] = useState(null);
-  const [noteText, setNoteText]     = useState('');
+  const [newItem, setNewItem]             = useState('');
+  const [newItemType, setNewItemType]     = useState('todo');
+
+  // ── Client note state ───────────────────────────────────────────────────────
+  const [clientName, setClientName]         = useState('');
+  const [noteTicketId, setNoteTicketId]     = useState(null);
+  const [noteText, setNoteText]             = useState('');
   const [noteSubmitting, setNoteSubmitting] = useState(false);
-  const [noteSaved, setNoteSaved]   = useState(false);
-  const [signoffMs, setSignoffMs]   = useState(null);
-  const [signoffName, setSignoffName] = useState('');
-  const [signoffDone, setSignoffDone] = useState({});
+  const [noteSaved, setNoteSaved]           = useState(false);
+
+  // ── Sign-off state ──────────────────────────────────────────────────────────
+  const [signoffName, setSignoffName]   = useState('');
+  const [signoffDone, setSignoffDone]   = useState({});
+
+  // ── Documents state ─────────────────────────────────────────────────────────
   const [attachments, setAttachments] = useState([]);
   const [docsLoaded, setDocsLoaded]   = useState(false);
 
+  // ── Refs ────────────────────────────────────────────────────────────────────
+  const ganttRef     = useRef(null);
+  const mermaidReady = useRef(false);
+
+  // ── Functions ───────────────────────────────────────────────────────────────
   function toggleCollapse(name) { setCollapsed(p => ({...p, [name]: !p[name]})); }
+
+  function switchView(v) {
+    setView(v);
+    if (typeof window !== 'undefined') localStorage.setItem('sondela_view', v);
+  }
+
+  async function load() {
+    if (!query.token) return;
+    setLoading(true);
+    try {
+      const res  = await fetch(`/api/p/${query.token}`);
+      const json = await res.json();
+      if (json.error) throw new Error(`${json.error}||${json.reason||''}`);
+      setData(json);
+      setLastFetch(new Date());
+    } catch (e) { setError(e.message); }
+    finally     { setLoading(false); }
+  }
 
   async function loadScratchpad() {
     if (!query.token || scratchLoaded) return;
@@ -100,7 +134,7 @@ export default function ProjectPage() {
     setNoteSaved(true);
     setNoteText('');
     setTimeout(() => setNoteSaved(false), 3000);
-    load(); // refresh to show new note
+    load();
   }
 
   async function loadDocs() {
@@ -118,30 +152,9 @@ export default function ProjectPage() {
       body: JSON.stringify({ milestoneName: msName, signerName: signoffName || 'Client' }),
     });
     setSignoffDone(p => ({...p, [msName]: true}));
-    setSignoffMs(null);
   }
 
-  function switchView(v) {
-    setView(v);
-    if (typeof window !== 'undefined') localStorage.setItem('sondela_view', v);
-  }
-
-  const ganttRef     = useRef(null);
-  const mermaidReady = useRef(false);
-
-  async function load() {
-    if (!query.token) return;
-    setLoading(true);
-    try {
-      const res  = await fetch(`/api/p/${query.token}`);
-      const json = await res.json();
-      if (json.error) throw new Error(`${json.error}||${json.reason||''}`);
-      setData(json);
-      setLastFetch(new Date());
-    } catch (e) { setError(e.message); }
-    finally     { setLoading(false); }
-  }
-
+  // ── Effects ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (mermaidReady.current) return;
     mermaidReady.current = true;
@@ -156,56 +169,6 @@ export default function ProjectPage() {
 
   useEffect(() => { if (query.token) load(); }, [query.token]);
 
-  async function loadCollab() {
-    if (!query.token) return;
-    const res = await fetch(`/api/collab/${query.token}`);
-    const d   = await res.json();
-    setCollabItems(d.items || []);
-  }
-
-  async function loadAttachments() {
-    if (!query.token) return;
-    const res = await fetch(`/api/attachments/${query.token}`);
-    const d   = await res.json();
-    setAttachments(d.attachments || []);
-  }
-
-  async function addCollabItem() {
-    if (!collabText.trim()) return;
-    setCollabSaving(true);
-    const res = await fetch(`/api/collab/${query.token}`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ text: collabText, author: 'client', authorName: 'Client' }),
-    });
-    const d = await res.json();
-    if (d.item) setCollabItems(prev => [...prev, d.item]);
-    setCollabText('');
-    setCollabSaving(false);
-  }
-
-  async function toggleItem(item) {
-    const res = await fetch(`/api/collab/${query.token}/${item.id}`, {
-      method: 'PATCH', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ done: !item.done }),
-    });
-    const d = await res.json();
-    if (d.item) setCollabItems(prev => prev.map(i => i.id===item.id ? d.item : i));
-  }
-
-  async function signOffMilestone(milestoneName) {
-    await fetch(`/api/admin/signoff/${query.token}`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ milestoneName, signedBy: 'Client' }),
-    });
-    setSignoffs(prev => ({...prev, [milestoneName]: true}));
-  }
-
-  function openPanel(name) {
-    setActivePanel(p => p===name ? null : name);
-    if (name === 'collab') loadCollab();
-    if (name === 'docs')   loadAttachments();
-  }
-
   useEffect(() => {
     if (!data || !ganttRef.current || view !== 'gantt') return;
     const render = async () => {
@@ -219,6 +182,7 @@ export default function ProjectPage() {
     setTimeout(render, 150);
   }, [data, view]);
 
+  // ── Derived values ──────────────────────────────────────────────────────────
   const colour   = data?.project?.client_colour || '#89b4fa';
   const pctTasks = data?.stats?.pctComplete || 0;
   const pctHours = data?.stats?.budgetHours
@@ -230,6 +194,7 @@ export default function ProjectPage() {
     : `${pctTasks}% complete · ${data?.stats?.done} of ${data?.stats?.total} tasks`;
   const title    = data ? `${data.project.client_name} — ${data.project.summary}` : 'Loading...';
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <>
       <Head><title>{title} | Sondela</title></Head>
@@ -312,8 +277,6 @@ export default function ProjectPage() {
               </div>
             </div>
 
-
-
             {/* Stats */}
             <div style={s.stats} className="print-section">
               {[
@@ -360,101 +323,6 @@ export default function ProjectPage() {
                 </div>
               </div>
             </div>
-
-            {/* Panel buttons */}
-            <div style={{display:'flex',gap:'8px',marginBottom:'12px',flexWrap:'wrap'}} className="no-print">
-              {[
-                { id:'collab', label:'💬 Collaboration', desc:'Shared notes & checklist' },
-                { id:'docs',   label:'📎 Documents',     desc:'Attachments & files' },
-              ].map(btn => (
-                <button key={btn.id} onClick={()=>openPanel(btn.id)}
-                  style={{background:activePanel===btn.id?colour:'#313244',color:activePanel===btn.id?'#1e1e2e':'#cdd6f4',border:`1px solid ${activePanel===btn.id?colour:'#45475a'}`,borderRadius:'8px',padding:'8px 16px',fontSize:'0.82em',cursor:'pointer',fontWeight:activePanel===btn.id?700:400}}>
-                  {btn.label}
-                </button>
-              ))}
-              <a href={`/api/ical/${query.token}`} download
-                style={{background:'#313244',color:'#cdd6f4',border:'1px solid #45475a',borderRadius:'8px',padding:'8px 16px',fontSize:'0.82em',textDecoration:'none',display:'flex',alignItems:'center',gap:'6px'}}>
-                📅 Subscribe Calendar
-              </a>
-              {data.stats.pctComplete===100 && (
-                <a href={`/certificate/${query.token}`} target="_blank" rel="noreferrer"
-                  style={{background:'linear-gradient(135deg,#40a060,#a6e3a1)',color:'#1e1e2e',borderRadius:'8px',padding:'8px 16px',fontSize:'0.82em',fontWeight:700,textDecoration:'none'}}>
-                  🏆 View Certificate
-                </a>
-              )}
-            </div>
-
-            {/* Collaboration Panel */}
-            {activePanel==='collab' && (
-              <div style={{background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'20px',marginBottom:'16px'}} className="no-print">
-                <h3 style={{color:'#cdd6f4',fontSize:'0.95em',margin:'0 0 14px',fontWeight:700}}>💬 Collaboration Board</h3>
-                <p style={{fontSize:'0.78em',color:'#6c7086',margin:'0 0 14px'}}>
-                  Add questions, requests, or notes below — Sondela Consulting will review and respond.
-                </p>
-
-                {/* Add item */}
-                <div style={{display:'flex',gap:'8px',marginBottom:'16px'}}>
-                  <input
-                    value={collabText} onChange={e=>setCollabText(e.target.value)}
-                    onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&(e.preventDefault(),addCollabItem())}
-                    placeholder="Add a note, question, or request..."
-                    style={{flex:1,background:'#1e1e2e',border:'1px solid #45475a',borderRadius:'8px',padding:'10px 14px',color:'#cdd6f4',fontSize:'0.85em'}}
-                  />
-                  <button onClick={addCollabItem} disabled={collabSaving||!collabText.trim()}
-                    style={{background:colour,color:'#1e1e2e',border:'none',borderRadius:'8px',padding:'10px 16px',cursor:'pointer',fontWeight:700,fontSize:'0.85em',opacity:collabSaving?0.6:1}}>
-                    {collabSaving?'...':'Add'}
-                  </button>
-                </div>
-
-                {/* Items list */}
-                {collabItems.length===0 && <p style={{color:'#45475a',fontSize:'0.82em',fontStyle:'italic'}}>No items yet. Add your first note or question above.</p>}
-                {[...collabItems].reverse().map(item => (
-                  <div key={item.id} style={{
-                    background:'#1e1e2e',borderRadius:'8px',padding:'12px 14px',marginBottom:'8px',
-                    borderLeft:`3px solid ${item.done?'#a6e3a1':item.author==='client'?colour:'#89b4fa'}`,
-                    opacity: item.done ? 0.65 : 1,
-                  }}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'10px'}}>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:'0.88em',color:'#cdd6f4',textDecoration:item.done?'line-through':'none',lineHeight:1.4}}>
-                          {item.text}
-                        </div>
-                        <div style={{fontSize:'0.7em',color:'#6c7086',marginTop:'5px',display:'flex',gap:'10px'}}>
-                          <span>{item.authorName}</span>
-                          <span>{item.createdAt?.substring(0,10)}</span>
-                          {item.done && <span style={{color:'#a6e3a1'}}>✓ Done by {item.doneBy} · {item.doneAt?.substring(0,10)}</span>}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Document Library Panel */}
-            {activePanel==='docs' && (
-              <div style={{background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'20px',marginBottom:'16px'}} className="no-print">
-                <h3 style={{color:'#cdd6f4',fontSize:'0.95em',margin:'0 0 14px',fontWeight:700}}>📎 Project Documents</h3>
-                {attachments.length===0
-                  ? <p style={{color:'#45475a',fontSize:'0.82em',fontStyle:'italic'}}>No attachments found on this project's tasks.</p>
-                  : (
-                    <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
-                      {attachments.map(a => (
-                        <div key={a.id} style={{display:'flex',alignItems:'center',gap:'12px',background:'#1e1e2e',borderRadius:'8px',padding:'10px 14px'}}>
-                          <span style={{fontSize:'1.2em'}}>{a.isImage?'🖼':'📄'}</span>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:'0.85em',color:'#cdd6f4',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.filename}</div>
-                            <div style={{fontSize:'0.72em',color:'#6c7086'}}>{a.uploadedAt} · {(a.size/1024).toFixed(0)}KB · Task #{a.ticketId}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )
-                }
-              </div>
-            )}
-
-            {/* Milestone sign-off (shown in Schedule view for completed milestones) */}
 
             {/* View switcher */}
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px',flexWrap:'wrap',gap:'10px'}} className="no-print">
@@ -556,10 +424,8 @@ export default function ProjectPage() {
                     <div style={s.blockBody} dangerouslySetInnerHTML={{__html:selected.details}}></div>
                   </div>
                 )}
-                <div style={s.blockLbl}>Updates &amp; Notes</div>
-                {/* Client note form */}
+                <div style={s.blockLbl}>Add a Note</div>
                 <div style={{background:'#1e1e2e',borderRadius:'8px',padding:'14px',marginBottom:'12px'}}>
-                  <div style={s.blockLbl}>Add a Note</div>
                   <textarea
                     placeholder="Add information, answers, or questions for this task..."
                     value={noteTicketId===selected.id?noteText:''}
@@ -576,7 +442,7 @@ export default function ProjectPage() {
                     </button>
                   </div>
                 </div>
-
+                <div style={s.blockLbl}>Updates &amp; Notes</div>
                 {selected.actions.length>0?selected.actions.map(a=>(
                   <div key={a.id} style={s.actionCard}>
                     <div style={s.actionMeta}>
@@ -591,18 +457,22 @@ export default function ProjectPage() {
               </div>
             )}
 
-            {/* Bottom tabs: Scratchpad | Documents */}
+            {/* Bottom tabs */}
             <div style={{marginTop:'20px'}}>
-              <div style={{display:'flex',gap:'0',background:'#181825',borderRadius:'10px',padding:'4px',width:'fit-content',marginBottom:'16px'}} className="no-print">
-                <button onClick={()=>{setActiveTab('tasks');}} style={{...s.viewBtn,...(activeTab==='tasks'?{...s.viewBtnActive}:{})}}>📋 Tasks</button>
-                <button onClick={()=>{setActiveTab('scratchpad');loadScratchpad();}} style={{...s.viewBtn,...(activeTab==='scratchpad'?{...s.viewBtnActive}:{})}}>
-                  📝 Scratchpad {scratchpad.filter(i=>!i.done&&i.type==='todo').length>0&&<span style={{background:'#89b4fa',color:'#1e1e2e',borderRadius:'10px',padding:'1px 7px',fontSize:'0.75em',marginLeft:'4px'}}>{scratchpad.filter(i=>!i.done&&i.type==='todo').length}</span>}
+              <div style={{display:'flex',background:'#181825',borderRadius:'10px',padding:'4px',width:'fit-content',marginBottom:'16px'}} className="no-print">
+                <button onClick={()=>setActiveTab('scratchpad')||loadScratchpad()} style={{...s.viewBtn,...(activeTab==='scratchpad'?{...s.viewBtnActive}:{})}}>
+                  📝 Scratchpad
+                  {scratchpad.filter(i=>!i.done&&i.type==='todo').length>0&&(
+                    <span style={{background:'#89b4fa',color:'#1e1e2e',borderRadius:'10px',padding:'1px 7px',fontSize:'0.75em',marginLeft:'4px'}}>
+                      {scratchpad.filter(i=>!i.done&&i.type==='todo').length}
+                    </span>
+                  )}
                 </button>
                 <button onClick={()=>{setActiveTab('docs');loadDocs();}} style={{...s.viewBtn,...(activeTab==='docs'?{...s.viewBtnActive}:{})}}>📁 Documents</button>
-                <button onClick={()=>{setActiveTab('signoff');}} style={{...s.viewBtn,...(activeTab==='signoff'?{...s.viewBtnActive}:{})}}>✅ Sign-off</button>
+                <button onClick={()=>setActiveTab('signoff')} style={{...s.viewBtn,...(activeTab==='signoff'?{...s.viewBtnActive}:{})}}>✅ Sign-off</button>
               </div>
 
-              {/* Scratchpad panel */}
+              {/* Scratchpad */}
               {activeTab==='scratchpad'&&(
                 <div style={{background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'20px',marginBottom:'16px'}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px',flexWrap:'wrap',gap:'10px'}}>
@@ -613,8 +483,6 @@ export default function ProjectPage() {
                     <input placeholder="Your name (optional)" value={clientName} onChange={e=>setClientName(e.target.value)}
                       style={{background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'6px 12px',color:'#cdd6f4',fontSize:'0.8em',width:'160px'}}/>
                   </div>
-
-                  {/* Add item row */}
                   <div style={{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}}>
                     <div style={{display:'flex',background:'#1e1e2e',borderRadius:'6px',padding:'2px',gap:'2px',flexShrink:0}}>
                       <button onClick={()=>setNewItemType('todo')} style={{background:newItemType==='todo'?'#313244':'transparent',border:'none',color:newItemType==='todo'?'#cdd6f4':'#6c7086',borderRadius:'4px',padding:'5px 10px',fontSize:'0.75em',cursor:'pointer'}}>☐ To-do</button>
@@ -630,8 +498,6 @@ export default function ProjectPage() {
                       Add
                     </button>
                   </div>
-
-                  {/* Items list */}
                   {scratchpad.length===0&&<div style={{color:'#45475a',fontSize:'0.85em',fontStyle:'italic',textAlign:'center',padding:'20px'}}>Nothing here yet — add your first item above</div>}
                   {scratchpad.map(item=>(
                     <div key={item.id} style={{display:'flex',alignItems:'flex-start',gap:'10px',padding:'10px 12px',background:item.done?'#1a1a2a':'#1e1e2e',borderRadius:'8px',marginBottom:'6px',opacity:item.done?0.6:1}}>
@@ -652,7 +518,7 @@ export default function ProjectPage() {
                 </div>
               )}
 
-              {/* Documents panel */}
+              {/* Documents */}
               {activeTab==='docs'&&(
                 <div style={{background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'20px',marginBottom:'16px'}}>
                   <h3 style={{color:'#cdd6f4',margin:'0 0 4px',fontSize:'1em'}}>📁 Document Library</h3>
@@ -664,7 +530,7 @@ export default function ProjectPage() {
                       <span style={{fontSize:'1.2em'}}>📄</span>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:'0.85em',color:'#cdd6f4',fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.filename}</div>
-                        <div style={{fontSize:'0.72em',color:'#6c7086'}}>{a.date} {a.size>0?`· ${(a.size/1024).toFixed(0)}KB`:''}</div>
+                        <div style={{fontSize:'0.72em',color:'#6c7086'}}>{a.date}{a.size>0?` · ${(a.size/1024).toFixed(0)}KB`:''}</div>
                       </div>
                     </div>
                   ))}
@@ -676,7 +542,7 @@ export default function ProjectPage() {
                 </div>
               )}
 
-              {/* Sign-off panel */}
+              {/* Sign-off */}
               {activeTab==='signoff'&&data&&(
                 <div style={{background:'#252535',border:'1px solid #45475a',borderRadius:'12px',padding:'20px',marginBottom:'16px'}}>
                   <h3 style={{color:'#cdd6f4',margin:'0 0 4px',fontSize:'1em'}}>✅ Milestone Sign-off</h3>
@@ -686,23 +552,23 @@ export default function ProjectPage() {
                       style={{background:'#313244',border:'1px solid #45475a',borderRadius:'6px',padding:'8px 12px',color:'#cdd6f4',fontSize:'0.85em',width:'200px',boxSizing:'border-box'}}/>
                   </div>
                   {data.milestones.map(ms=>{
-                    const msTasks=data.taskDetails.filter(t=>t.milestone===ms.name);
-                    const allDone=msTasks.length>0&&msTasks.every(t=>[9,16,21].includes(t.status_id));
-                    const done=signoffDone[ms.name];
-                    return(
+                    const msTasks = data.taskDetails.filter(t=>t.milestone===ms.name);
+                    const allDone = msTasks.length>0&&msTasks.every(t=>[9,16,21].includes(t.status_id));
+                    const done    = signoffDone[ms.name];
+                    return (
                       <div key={ms.name} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 16px',background:'#1e1e2e',borderRadius:'8px',marginBottom:'6px'}}>
                         <div>
                           <div style={{fontSize:'0.88em',color:'#cdd6f4',fontWeight:500}}>{ms.name}</div>
                           <div style={{fontSize:'0.75em',color:'#6c7086'}}>{msTasks.length} tasks · {msTasks.filter(t=>[9,16,21].includes(t.status_id)).length} completed</div>
                         </div>
-                        {done?(
+                        {done ? (
                           <span style={{fontSize:'0.8em',color:'#a6e3a1',fontWeight:600}}>✅ Approved</span>
-                        ):allDone?(
+                        ) : allDone ? (
                           <button onClick={()=>submitSignoff(ms.name)} disabled={!signoffName.trim()}
                             style={{background:'#a6e3a1',color:'#1e1e2e',border:'none',borderRadius:'6px',padding:'7px 16px',fontSize:'0.8em',fontWeight:700,cursor:signoffName.trim()?'pointer':'not-allowed',opacity:signoffName.trim()?1:0.5}}>
                             Approve ✓
                           </button>
-                        ):(
+                        ) : (
                           <span style={{fontSize:'0.75em',color:'#45475a'}}>Not complete</span>
                         )}
                       </div>
@@ -734,22 +600,20 @@ function ScheduleView({ data, selected, setSelected, colour, hideCompleted, coll
   });
   let other = data.taskDetails.filter(t => t.milestone === 'Other');
   if (hideCompleted) other = other.filter(t => !CL.includes(t.status_id));
-  const totalH = data.stats.budgetHours || 0;
-  const allNames = [...Object.keys(tasksByMilestone),...(other.length>0?['__other__']:[])];
+  const totalH       = data.stats.budgetHours || 0;
+  const allNames     = [...Object.keys(tasksByMilestone),...(other.length>0?['__other__']:[])];
   const allCollapsed = allNames.every(n => collapsed[n]);
   function collapseAll() { allNames.forEach(n => { if (!collapsed[n]) toggleCollapse(n); }); }
   function expandAll()   { allNames.forEach(n => { if (collapsed[n])  toggleCollapse(n); }); }
 
   return (
     <div style={sv.wrap}>
-      {/* Collapse All button row - separate from column headers */}
       <div style={{display:'flex',justifyContent:'flex-end',padding:'6px 16px',background:'#181825',borderBottom:'1px solid #45475a'}}>
         <button onClick={allCollapsed?expandAll:collapseAll}
           style={{background:'#313244',border:'1px solid #45475a',color:'#a6adc8',borderRadius:'6px',padding:'4px 12px',fontSize:'0.75em',cursor:'pointer',whiteSpace:'nowrap'}}>
           {allCollapsed?'▶ Expand All':'▼ Collapse All'}
         </button>
       </div>
-      {/* Column headers - full width, no competing elements */}
       <div style={sv.tableHead}>
         <div style={{...sv.col, width:'130px'}}>Status</div>
         <div style={{...sv.col, flex:1}}>Summary</div>
@@ -763,7 +627,7 @@ function ScheduleView({ data, selected, setSelected, colour, hideCompleted, coll
 
       {Object.values(tasksByMilestone).map(({ milestone: ms, tasks }) => {
         const isCollapsed = collapsed[ms.name];
-        const msCol = ms.state===2?'#a6e3a1':ms.state===1?colour:'#f9e2af';
+        const msCol   = ms.state===2?'#a6e3a1':ms.state===1?colour:'#f9e2af';
         const msHours = tasks.reduce((a,t)=>a+t.hoursLogged,0);
         if (tasks.length===0 && hideCompleted) return null;
         return (
@@ -773,22 +637,16 @@ function ScheduleView({ data, selected, setSelected, colour, hideCompleted, coll
               <div style={{display:'flex',alignItems:'center',gap:'8px',flex:1}}>
                 <span style={{color:msCol,fontSize:'0.8em',display:'inline-block',transform:isCollapsed?'rotate(-90deg)':'rotate(0deg)',transition:'transform 0.2s'}}>▼</span>
                 <span style={{...sv.msLabel,color:msCol}}>{ms.name}</span>
-                <span style={{fontSize:'0.72em',color:'#6c7086'}}>
-                  {tasks.length} task{tasks.length!==1?'s':''} · {msHours.toFixed(1)}h
-                </span>
+                <span style={{fontSize:'0.72em',color:'#6c7086'}}>{tasks.length} task{tasks.length!==1?'s':''} · {msHours.toFixed(1)}h</span>
               </div>
               <span style={{fontSize:'0.72em',color:'#45475a'}}>{isCollapsed?'Click to expand':'Click to collapse'}</span>
             </div>
             {!isCollapsed && tasks.map((t,i) => {
-              const pct = totalH>0?Math.min(100,Math.round((t.hoursLogged/totalH)*100)):0;
+              const pct       = totalH>0?Math.min(100,Math.round((t.hoursLogged/totalH)*100)):0;
               const isOverdue = t.targetdate && !CL.includes(t.status_id) && new Date(t.targetdate) < new Date();
               return (
                 <div key={t.id} onClick={()=>setSelected(p=>p?.id===t.id?null:t)}
-                  style={{...sv.taskRow,
-                    background:selected?.id===t.id?'#1e2535':i%2===0?'#252535':'#1e1e2e',
-                    borderLeft:selected?.id===t.id?`3px solid ${colour}`:'3px solid transparent',
-                    opacity:CL.includes(t.status_id)?0.7:1,
-                  }}>
+                  style={{...sv.taskRow,background:selected?.id===t.id?'#1e2535':i%2===0?'#252535':'#1e1e2e',borderLeft:selected?.id===t.id?`3px solid ${colour}`:'3px solid transparent',opacity:CL.includes(t.status_id)?0.7:1}}>
                   <div style={{width:'130px',flexShrink:0}}>
                     <span style={{...sv.pill,...statusStyle(t.status_id)}}>{statusLabel(t.status_id)}</span>
                   </div>
@@ -800,11 +658,11 @@ function ScheduleView({ data, selected, setSelected, colour, hideCompleted, coll
                   <div style={{width:'100px',flexShrink:0,fontSize:'0.78em',color:isOverdue?'#f38ba8':'#a6adc8',fontWeight:isOverdue?700:400}}>
                     {t.targetdate||'—'}{isOverdue&&' ⚠️'}
                   </div>
-                  <div style={{width:'80px',flexShrink:0,fontSize:'0.78em',color:'#fab387',textAlign:'center'}}>
-                    {t.hoursLogged>0?`${t.hoursLogged.toFixed(1)}h`:'—'}
-                  </div>
+                  <div style={{width:'80px',flexShrink:0,fontSize:'0.78em',color:'#fab387',textAlign:'center'}}>{t.hoursLogged>0?`${t.hoursLogged.toFixed(1)}h`:'—'}</div>
                   <div style={{width:'90px',flexShrink:0,fontSize:'0.7em',color:'#45475a'}}>{t.lastUpdated||'—'}</div>
-                  <div style={{width:'150px',flexShrink:0,fontSize:'0.75em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:t.agent&&t.agent!=='Unassigned'?'#a6adc8':'#45475a'}}>{t.agent&&t.agent!=='Unassigned'?'Assigned':'Unassigned'}</div>
+                  <div style={{width:'150px',flexShrink:0,fontSize:'0.75em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:t.agent&&t.agent!=='Unassigned'?'#a6adc8':'#45475a'}}>
+                    {t.agent&&t.agent!=='Unassigned'?'Assigned':'Unassigned'}
+                  </div>
                   <div style={{width:'80px',flexShrink:0}}>
                     <div style={sv.budgetTrack}><div style={{...sv.budgetBar,width:`${pct}%`,background:colour}}></div></div>
                     <div style={{fontSize:'0.65em',color:'#6c7086',textAlign:'center',marginTop:'2px'}}>{pct}%</div>
@@ -815,6 +673,7 @@ function ScheduleView({ data, selected, setSelected, colour, hideCompleted, coll
           </div>
         );
       })}
+
       {other.length>0&&(
         <div>
           <div onClick={()=>toggleCollapse('__other__')}
@@ -848,14 +707,14 @@ function ScheduleView({ data, selected, setSelected, colour, hideCompleted, coll
 function KanbanView({ data, selected, setSelected, colour, hideCompleted }) {
   const CLOSED_IDS=[9,16,21], ACTIVE_IDS=[2,22];
   const columns = [
-    { label:'📋 New',        filter:t=>!CLOSED_IDS.includes(t.status_id)&&!ACTIVE_IDS.includes(t.status_id), colour:'#f9e2af' },
-    { label:'🔄 In Progress',filter:t=>ACTIVE_IDS.includes(t.status_id),                                     colour:'#89b4fa' },
-    { label:'✅ Completed',  filter:t=>CLOSED_IDS.includes(t.status_id),                                     colour:'#a6e3a1' },
+    { label:'📋 New',         filter:t=>!CLOSED_IDS.includes(t.status_id)&&!ACTIVE_IDS.includes(t.status_id), colour:'#f9e2af' },
+    { label:'🔄 In Progress', filter:t=>ACTIVE_IDS.includes(t.status_id),                                     colour:'#89b4fa' },
+    { label:'✅ Completed',   filter:t=>CLOSED_IDS.includes(t.status_id),                                     colour:'#a6e3a1' },
   ];
   return (
     <div style={kv.board}>
       {columns.map(col=>{
-        const tasks=data.taskDetails.filter(col.filter);
+        const tasks = data.taskDetails.filter(col.filter);
         if (hideCompleted&&col.label.includes('Completed')) return null;
         return (
           <div key={col.label} style={kv.column}>
@@ -866,7 +725,7 @@ function KanbanView({ data, selected, setSelected, colour, hideCompleted }) {
             <div style={kv.cards}>
               {tasks.length===0&&<div style={kv.empty}>No tasks</div>}
               {tasks.map(t=>{
-                const isOverdue=t.targetdate&&!CLOSED_IDS.includes(t.status_id)&&new Date(t.targetdate)<new Date();
+                const isOverdue = t.targetdate&&!CLOSED_IDS.includes(t.status_id)&&new Date(t.targetdate)<new Date();
                 return (
                   <div key={t.id} onClick={()=>setSelected(p=>p?.id===t.id?null:t)}
                     style={{...kv.card,background:selected?.id===t.id?'#252545':'#252535',border:selected?.id===t.id?`1px solid ${colour}`:'1px solid #45475a'}}>
@@ -894,57 +753,57 @@ function KanbanView({ data, selected, setSelected, colour, hideCompleted }) {
 
 // ── STYLES ────────────────────────────────────────────────────────────────────
 const s = {
-  page:        {minHeight:'100vh',background:'#1e1e2e',color:'#cdd6f4',fontFamily:'Segoe UI,Arial,sans-serif'},
-  header:      {background:'#181825',borderBottom:'1px solid #313244',padding:'14px 30px'},
-  hInner:      {maxWidth:'1500px',margin:'0 auto',display:'flex',justifyContent:'space-between',alignItems:'center'},
-  brand:       {color:'#89b4fa',fontWeight:700,fontSize:'0.95em'},
-  updated:     {color:'#6c7086',fontSize:'0.78em'},
-  printBtn:    {background:'#313244',color:'#cdd6f4',border:'1px solid #45475a',borderRadius:'8px',padding:'7px 14px',fontSize:'0.82em',cursor:'pointer'},
-  spinWrap:    {display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'50vh',gap:'20px'},
-  spinDot:     {width:'36px',height:'36px',border:'3px solid #313244',borderTopColor:'#89b4fa',borderRadius:'50%',animation:'spin 0.8s linear infinite'},
-  main:        {maxWidth:'1500px',margin:'0 auto',padding:'28px'},
-  titleRow:    {display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'16px',gap:'20px',flexWrap:'wrap'},
-  clientBadge: {display:'inline-block',background:'#313244',border:'1px solid',borderRadius:'20px',fontSize:'0.78em',padding:'4px 14px',marginBottom:'8px'},
-  h1:          {fontSize:'1.4em',color:'#cdd6f4',fontWeight:700,lineHeight:1.3,marginBottom:'4px'},
-  meta:        {fontSize:'0.82em',color:'#6c7086',margin:0},
-  emailBtn:    {background:'#313244',color:'#cdd6f4',border:'1px solid #45475a',borderRadius:'8px',padding:'9px 14px',fontSize:'0.85em',cursor:'pointer',whiteSpace:'nowrap'},
-  refreshBtn:  {background:'#313244',color:'#cdd6f4',border:'1px solid #45475a',borderRadius:'8px',padding:'9px 18px',fontSize:'0.85em',cursor:'pointer',whiteSpace:'nowrap'},
-  stats:       {display:'flex',gap:'10px',marginBottom:'16px',flexWrap:'wrap'},
-  stat:        {background:'#313244',border:'1px solid #45475a',borderRadius:'10px',padding:'12px 16px',flex:1,minWidth:'90px'},
-  statV:       {fontSize:'1.5em',fontWeight:700,color:'#cdd6f4'},
-  statL:       {fontSize:'0.7em',color:'#6c7086',marginTop:'2px'},
-  viewSwitcher:{display:'flex',background:'#181825',borderRadius:'10px',padding:'4px',width:'fit-content'},
-  viewBtn:     {background:'transparent',border:'none',color:'#6c7086',padding:'8px 20px',borderRadius:'7px',cursor:'pointer',fontSize:'0.85em',fontWeight:500,borderBottom:'2px solid transparent',transition:'all 0.15s'},
+  page:         {minHeight:'100vh',background:'#1e1e2e',color:'#cdd6f4',fontFamily:'Segoe UI,Arial,sans-serif'},
+  header:       {background:'#181825',borderBottom:'1px solid #313244',padding:'14px 30px'},
+  hInner:       {maxWidth:'1500px',margin:'0 auto',display:'flex',justifyContent:'space-between',alignItems:'center'},
+  brand:        {color:'#89b4fa',fontWeight:700,fontSize:'0.95em'},
+  updated:      {color:'#6c7086',fontSize:'0.78em'},
+  printBtn:     {background:'#313244',color:'#cdd6f4',border:'1px solid #45475a',borderRadius:'8px',padding:'7px 14px',fontSize:'0.82em',cursor:'pointer'},
+  spinWrap:     {display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'50vh',gap:'20px'},
+  spinDot:      {width:'36px',height:'36px',border:'3px solid #313244',borderTopColor:'#89b4fa',borderRadius:'50%',animation:'spin 0.8s linear infinite'},
+  main:         {maxWidth:'1500px',margin:'0 auto',padding:'28px'},
+  titleRow:     {display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'16px',gap:'20px',flexWrap:'wrap'},
+  clientBadge:  {display:'inline-block',background:'#313244',border:'1px solid',borderRadius:'20px',fontSize:'0.78em',padding:'4px 14px',marginBottom:'8px'},
+  h1:           {fontSize:'1.4em',color:'#cdd6f4',fontWeight:700,lineHeight:1.3,marginBottom:'4px'},
+  meta:         {fontSize:'0.82em',color:'#6c7086',margin:0},
+  emailBtn:     {background:'#313244',color:'#cdd6f4',border:'1px solid #45475a',borderRadius:'8px',padding:'9px 14px',fontSize:'0.85em',cursor:'pointer',whiteSpace:'nowrap'},
+  refreshBtn:   {background:'#313244',color:'#cdd6f4',border:'1px solid #45475a',borderRadius:'8px',padding:'9px 18px',fontSize:'0.85em',cursor:'pointer',whiteSpace:'nowrap'},
+  stats:        {display:'flex',gap:'10px',marginBottom:'16px',flexWrap:'wrap'},
+  stat:         {background:'#313244',border:'1px solid #45475a',borderRadius:'10px',padding:'12px 16px',flex:1,minWidth:'90px'},
+  statV:        {fontSize:'1.5em',fontWeight:700,color:'#cdd6f4'},
+  statL:        {fontSize:'0.7em',color:'#6c7086',marginTop:'2px'},
+  viewSwitcher: {display:'flex',background:'#181825',borderRadius:'10px',padding:'4px',width:'fit-content'},
+  viewBtn:      {background:'transparent',border:'none',color:'#6c7086',padding:'8px 20px',borderRadius:'7px',cursor:'pointer',fontSize:'0.85em',fontWeight:500,borderBottom:'2px solid transparent',transition:'all 0.15s'},
   viewBtnActive:{background:'#313244',color:'#cdd6f4',fontWeight:700},
-  mainRow:     {display:'flex',gap:'16px',alignItems:'flex-start',marginBottom:'20px'},
-  ganttPanel:  {flex:1,minWidth:0,background:'#313244',border:'1px solid #45475a',borderRadius:'12px',padding:'20px'},
-  panelHdr:    {display:'flex',alignItems:'center',gap:'12px',marginBottom:'14px',flexWrap:'wrap'},
-  panelTitle:  {fontSize:'0.9em',color:'#a6adc8',fontWeight:600,margin:0},
-  ganttScroll: {overflowX:'auto',overflowY:'auto',maxHeight:'520px',paddingBottom:'8px'},
-  taskPanel:   {width:'260px',flexShrink:0,background:'#313244',border:'1px solid #45475a',borderRadius:'12px',padding:'16px',display:'flex',flexDirection:'column'},
-  taskScroll:  {overflowY:'auto',maxHeight:'480px',display:'flex',flexDirection:'column',gap:'6px'},
-  taskRow:     {background:'#1e1e2e',border:'1px solid #313244',borderRadius:'8px',padding:'10px 12px',cursor:'pointer',transition:'all 0.15s'},
+  mainRow:      {display:'flex',gap:'16px',alignItems:'flex-start',marginBottom:'20px'},
+  ganttPanel:   {flex:1,minWidth:0,background:'#313244',border:'1px solid #45475a',borderRadius:'12px',padding:'20px'},
+  panelHdr:     {display:'flex',alignItems:'center',gap:'12px',marginBottom:'14px',flexWrap:'wrap'},
+  panelTitle:   {fontSize:'0.9em',color:'#a6adc8',fontWeight:600,margin:0},
+  ganttScroll:  {overflowX:'auto',overflowY:'auto',maxHeight:'520px',paddingBottom:'8px'},
+  taskPanel:    {width:'260px',flexShrink:0,background:'#313244',border:'1px solid #45475a',borderRadius:'12px',padding:'16px',display:'flex',flexDirection:'column'},
+  taskScroll:   {overflowY:'auto',maxHeight:'480px',display:'flex',flexDirection:'column',gap:'6px'},
+  taskRow:      {background:'#1e1e2e',border:'1px solid #313244',borderRadius:'8px',padding:'10px 12px',cursor:'pointer',transition:'all 0.15s'},
   taskRowActive:{background:'#1e2535',border:'1px solid #89b4fa'},
-  taskTop:     {display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'5px'},
-  pill:        {fontSize:'0.68em',padding:'2px 8px',borderRadius:'8px',fontWeight:600},
-  taskName:    {fontSize:'0.8em',color:'#cdd6f4',lineHeight:1.35,marginBottom:'5px'},
-  taskMeta:    {display:'flex',justifyContent:'space-between',alignItems:'center'},
-  detail:      {background:'#252535',border:'1px solid #89b4fa',borderRadius:'14px',padding:'24px',marginBottom:'20px',animation:'fadeUp 0.2s ease'},
-  detailHdr:   {display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'16px',gap:'16px'},
-  detailTitle: {fontSize:'1.1em',color:'#cdd6f4',fontWeight:700,margin:0},
-  closeBtn:    {background:'#45475a',border:'none',color:'#cdd6f4',borderRadius:'6px',padding:'7px 12px',cursor:'pointer',flexShrink:0,fontSize:'0.82em'},
-  infoGrid:    {display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:'12px',background:'#1e1e2e',borderRadius:'10px',padding:'14px',marginBottom:'16px'},
-  infoItem:    {display:'flex',flexDirection:'column',gap:'3px'},
-  infoLbl:     {fontSize:'0.68em',color:'#6c7086',textTransform:'uppercase',letterSpacing:'0.06em'},
-  infoVal:     {fontSize:'0.86em',color:'#cdd6f4'},
-  block:       {background:'#1e1e2e',borderRadius:'8px',padding:'14px',marginBottom:'14px'},
-  blockLbl:    {fontSize:'0.7em',color:'#6c7086',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:'8px',marginTop:'4px'},
-  blockBody:   {fontSize:'0.84em',color:'#cdd6f4',lineHeight:1.7},
-  actionCard:  {background:'#1e1e2e',borderRadius:'8px',padding:'14px',marginBottom:'8px'},
-  actionMeta:  {display:'flex',gap:'10px',fontSize:'0.75em',marginBottom:'8px',flexWrap:'wrap',alignItems:'center'},
-  actionBody:  {fontSize:'0.84em',color:'#cdd6f4',lineHeight:1.7,whiteSpace:'pre-wrap'},
-  noNotes:     {fontSize:'0.84em',color:'#6c7086',fontStyle:'italic',padding:'12px 0'},
-  footer:      {display:'flex',justifyContent:'space-between',fontSize:'0.8em',color:'#6c7086',flexWrap:'wrap',gap:'8px',paddingTop:'8px'},
+  taskTop:      {display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'5px'},
+  pill:         {fontSize:'0.68em',padding:'2px 8px',borderRadius:'8px',fontWeight:600},
+  taskName:     {fontSize:'0.8em',color:'#cdd6f4',lineHeight:1.35,marginBottom:'5px'},
+  taskMeta:     {display:'flex',justifyContent:'space-between',alignItems:'center'},
+  detail:       {background:'#252535',border:'1px solid #89b4fa',borderRadius:'14px',padding:'24px',marginBottom:'20px',animation:'fadeUp 0.2s ease'},
+  detailHdr:    {display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'16px',gap:'16px'},
+  detailTitle:  {fontSize:'1.1em',color:'#cdd6f4',fontWeight:700,margin:0},
+  closeBtn:     {background:'#45475a',border:'none',color:'#cdd6f4',borderRadius:'6px',padding:'7px 12px',cursor:'pointer',flexShrink:0,fontSize:'0.82em'},
+  infoGrid:     {display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:'12px',background:'#1e1e2e',borderRadius:'10px',padding:'14px',marginBottom:'16px'},
+  infoItem:     {display:'flex',flexDirection:'column',gap:'3px'},
+  infoLbl:      {fontSize:'0.68em',color:'#6c7086',textTransform:'uppercase',letterSpacing:'0.06em'},
+  infoVal:      {fontSize:'0.86em',color:'#cdd6f4'},
+  block:        {background:'#1e1e2e',borderRadius:'8px',padding:'14px',marginBottom:'14px'},
+  blockLbl:     {fontSize:'0.7em',color:'#6c7086',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:'8px',marginTop:'4px'},
+  blockBody:    {fontSize:'0.84em',color:'#cdd6f4',lineHeight:1.7},
+  actionCard:   {background:'#1e1e2e',borderRadius:'8px',padding:'14px',marginBottom:'8px'},
+  actionMeta:   {display:'flex',gap:'10px',fontSize:'0.75em',marginBottom:'8px',flexWrap:'wrap',alignItems:'center'},
+  actionBody:   {fontSize:'0.84em',color:'#cdd6f4',lineHeight:1.7,whiteSpace:'pre-wrap'},
+  noNotes:      {fontSize:'0.84em',color:'#6c7086',fontStyle:'italic',padding:'12px 0'},
+  footer:       {display:'flex',justifyContent:'space-between',fontSize:'0.8em',color:'#6c7086',flexWrap:'wrap',gap:'8px',paddingTop:'8px'},
 };
 const sv = {
   wrap:        {background:'#313244',border:'1px solid #45475a',borderRadius:'12px',overflow:'hidden',marginBottom:'20px'},
@@ -968,6 +827,6 @@ const kv = {
   cardMs:    {fontSize:'0.68em',color:'#6c7086',marginBottom:'5px',textTransform:'uppercase',letterSpacing:'0.04em'},
   cardTitle: {fontSize:'0.82em',color:'#cdd6f4',lineHeight:1.4,marginBottom:'6px',fontWeight:500},
   cardFoot:  {display:'flex',justifyContent:'space-between',alignItems:'center',gap:'6px',flexWrap:'wrap'},
-  cardAgent: {fontSize:'0.7em',color:'#6c7086',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'100px'},
+  cardAgent: {fontSize:'0.7em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'100px'},
   empty:     {fontSize:'0.8em',color:'#45475a',textAlign:'center',padding:'20px',fontStyle:'italic'},
 };
