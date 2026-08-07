@@ -1,15 +1,14 @@
-import { haloFetch } from '../../../lib/halo';
+import { haloFetch, haloFetchAll } from '../../../lib/halo';
 import { signProject } from '../../../lib/token';
 
 export default async function handler(req, res) {
   const { id } = req.query;
   try {
-    const [clientData, projectData] = await Promise.all([
+    const [clientData, all] = await Promise.all([
       haloFetch(`/api/Client/${id}`),
-      haloFetch(`/api/Projects?pagesize=200&tickettype_id=5&client_id=${id}`),
+      haloFetchAll(`/api/Projects?tickettype_id=5&client_id=${id}`),
     ]);
 
-    const all = projectData.tickets || projectData.projects || [];
     const projects = all
       .filter(p => !p.parent_id && p.tickettype_id === 5 && p.client_id == id)
       .map(p => {

@@ -1,4 +1,4 @@
-import { haloFetch } from '../../../lib/halo';
+import { haloFetchAll } from '../../../lib/halo';
 import { signProject } from '../../../lib/token';
 import { getNextSessionOverride, getBulkLinkData } from '../../../lib/redis';
 
@@ -28,15 +28,15 @@ function calcRAG(tasks) {
 
 export default async function handler(req, res) {
   try {
-    const [projectData, clientData] = await Promise.all([
-      haloFetch('/api/Projects?pagesize=200&tickettype_id=5'),
-      haloFetch('/api/Client?pagesize=200'),
+    const [projectList, clientList] = await Promise.all([
+      haloFetchAll('/api/Projects?tickettype_id=5'),
+      haloFetchAll('/api/Client'),
     ]);
 
     const clientMap = {};
-    (clientData.clients || clientData || []).forEach(c => { clientMap[c.id] = c; });
+    clientList.forEach(c => { clientMap[c.id] = c; });
 
-    const all = (projectData.tickets || projectData.projects || [])
+    const all = projectList
       .filter(p => !p.parent_id && p.tickettype_id === 5 && p.status_id !== 9);
 
     const ids = all.map(p => p.id);
