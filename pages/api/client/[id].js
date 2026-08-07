@@ -1,4 +1,5 @@
 import { haloFetch, haloFetchAll } from '../../../lib/halo';
+import { indexChildren, progressFor } from '../../../lib/progress';
 import { signProject } from '../../../lib/token';
 
 export default async function handler(req, res) {
@@ -6,15 +7,15 @@ export default async function handler(req, res) {
   try {
     const [clientData, all] = await Promise.all([
       haloFetch(`/api/Client/${id}`),
-      haloFetchAll(`/api/Projects?tickettype_id=5&client_id=${id}`),
+      haloFetchAll(`/api/Projects?client_id=${id}`),
     ]);
+
+    const childrenByParent = indexChildren(all);
 
     const projects = all
       .filter(p => !p.parent_id && p.tickettype_id === 5 && p.client_id == id)
       .map(p => {
-        const total = p.child_count || 0;
-        const open  = p.child_count_open || 0;
-        const done  = Math.max(0, total - open);
+        const { total, done } = progressFor(p, childrenByParent);
         return {
           id:           p.id,
           token:        signProject(p.id),

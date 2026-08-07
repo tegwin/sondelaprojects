@@ -1,4 +1,5 @@
 import { haloFetchAll } from '../../../lib/halo';
+import { CLOSED_STATUS_ID, indexChildren, progressFor } from '../../../lib/progress';
 import { signProject } from '../../../lib/token';
 import { getNextSessionOverride, getBulkLinkData } from '../../../lib/redis';
 
@@ -29,15 +30,17 @@ function calcRAG(tasks) {
 export default async function handler(req, res) {
   try {
     const [projectList, clientList] = await Promise.all([
-      haloFetchAll('/api/Projects?tickettype_id=5'),
+      haloFetchAll('/api/Projects'),
       haloFetchAll('/api/Client'),
     ]);
 
     const clientMap = {};
     clientList.forEach(c => { clientMap[c.id] = c; });
 
+    const childrenByParent = indexChildren(projectList);
+
     const all = projectList
-      .filter(p => !p.parent_id && p.tickettype_id === 5 && p.status_id !== 9);
+      .filter(p => !p.parent_id && p.tickettype_id === 5 && p.status_id !== CLOSED_STATUS_ID);
 
     const ids = all.map(p => p.id);
     const [linkDataArr, nextSessions] = await Promise.all([
@@ -49,10 +52,7 @@ export default async function handler(req, res) {
     linkDataArr.forEach(l => { linkMap[l.projectId] = l; });
 
     const projects = all.map((p, i) => {
-      const total   = p.child_count || 0;
-      const open    = p.child_count_open || 0;
-      const done    = Math.max(0, total - open);
-      const pct     = total > 0 ? Math.round((done / total) * 100) : 0;
+      const { total, done, pct } = progressFor(p, childrenByParent);
       const hours   = p.projecttimeactual || 0;
       const budget  = p.budgets?.[0]?.hours || null;
       const client  = clientMap[p.client_id] || {};
