@@ -1,14 +1,13 @@
 import { haloFetchAll } from '../../lib/halo';
 import { signProject } from '../../lib/token';
-
-// Closed is the only status that hides a project. Everything else — New,
-// In Progress, On Hold, Awaiting Approval, anything added later — counts as open.
-const CLOSED_STATUS_ID = 9;
+import { CLOSED_STATUS_ID, indexChildren, progressFor } from '../../lib/progress';
 
 export default async function handler(req, res) {
   try {
+    // No tickettype_id filter: Halo ignores it anyway, and the child rows in the
+    // full set are what the progress figures are counted from.
     const [all, clientList] = await Promise.all([
-      haloFetchAll('/api/Projects?tickettype_id=5'),
+      haloFetchAll('/api/Projects'),
       haloFetchAll('/api/Client'),
     ]);
 
@@ -17,14 +16,13 @@ export default async function handler(req, res) {
       clientMap[c.id] = { colour: c.colour || '#89b4fa', name: c.name };
     });
 
+    const childrenByParent = indexChildren(all);
+
     const projects = all
       .filter(p => !p.parent_id && p.tickettype_id === 5)
       .filter(p => p.status_id !== CLOSED_STATUS_ID)
       .map(p => {
-        const total  = p.child_count || 0;
-        const open   = p.child_count_open || 0;
-        const done   = Math.max(0, total - open);
-        const pct    = total > 0 ? Math.round((done / total) * 100) : 0;
+        const { total, done, pct } = progressFor(p, childrenByParent);
         const client = clientMap[p.client_id] || {};
         return {
           id:            p.id,
