@@ -1,11 +1,10 @@
-import { haloFetch } from '../../../lib/halo';
+import { haloFetchAll } from '../../../lib/halo';
 import { getBulkLinkData } from '../../../lib/redis';
 import { signProject } from '../../../lib/token';
 
 export default async function handler(req, res) {
   try {
-    const projectData = await haloFetch('/api/Projects?pagesize=200&tickettype_id=5');
-    const all = projectData.tickets || projectData.projects || [];
+    const all = await haloFetchAll('/api/Projects?tickettype_id=5');
     const projects = all.filter(p => !p.parent_id && p.tickettype_id === 5);
     const ids = projects.map(p => p.id);
     const linkData = await getBulkLinkData(ids);

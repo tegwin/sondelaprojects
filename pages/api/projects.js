@@ -1,22 +1,25 @@
-import { haloFetch } from '../../lib/halo';
+import { haloFetchAll } from '../../lib/halo';
 import { signProject } from '../../lib/token';
+
+// Closed is the only status that hides a project. Everything else — New,
+// In Progress, On Hold, Awaiting Approval, anything added later — counts as open.
+const CLOSED_STATUS_ID = 9;
 
 export default async function handler(req, res) {
   try {
-    const [projectData, clientData] = await Promise.all([
-      haloFetch('/api/Projects?pagesize=200&tickettype_id=5'),
-      haloFetch('/api/Client?pagesize=200'),
+    const [all, clientList] = await Promise.all([
+      haloFetchAll('/api/Projects?tickettype_id=5'),
+      haloFetchAll('/api/Client'),
     ]);
 
     const clientMap = {};
-    (clientData.clients || clientData || []).forEach(c => {
+    clientList.forEach(c => {
       clientMap[c.id] = { colour: c.colour || '#89b4fa', name: c.name };
     });
 
-    const all = projectData.tickets || projectData.projects || [];
-
     const projects = all
       .filter(p => !p.parent_id && p.tickettype_id === 5)
+      .filter(p => p.status_id !== CLOSED_STATUS_ID)
       .map(p => {
         const total  = p.child_count || 0;
         const open   = p.child_count_open || 0;
