@@ -144,7 +144,7 @@ export default async function handler(req, res) {
       startdate: fmtDate(t.startdate),
       targetdate: fmtDate(t.targetdate),
       hoursLogged: t.projecttimeactual || 0,
-      details: t.details_html || (t.details ? `<p>${escapeHtml(t.details)}</p>` : ''),
+      details: t.details_html || (t.details ? `<p>${escapeHtml(t.details)}</p>` : ''),  // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format -- the interpolated value is escaped; details_html is Halo-rendered markup by design
       milestone: milestones.find(ms => ms.tickets_list.some(r => r.id === t.id))?.name || 'Other',
       actions: actionsMap[t.id] || [],
     }));

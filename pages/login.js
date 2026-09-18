@@ -55,7 +55,7 @@ export default function Login() {
     }
 
     if (res.ok && data.ok) {
-      router.replace(safeNext(router.query.next));
+      router.replace(safeNext(router.query.next));  // nosemgrep: typescript.nextjs.react-nextjs-router-push.react-nextjs-router-push -- safeNext() only returns a path rooted on this site
     } else {
       setError(data.error || `Login failed (${res.status})`);
       setLoading(false);
