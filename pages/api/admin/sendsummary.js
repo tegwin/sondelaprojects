@@ -1,5 +1,6 @@
 import { verifyProject } from '../../../lib/token';
 import { haloFetch } from '../../../lib/halo';
+import { escapeHtml } from '../../../lib/escapeHtml';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -24,8 +25,8 @@ export default async function handler(req, res) {
 
     const notesHtml = actions.map(a => `
       <div style="margin-bottom:16px;padding:12px;background:#f8f9fa;border-radius:6px;border-left:3px solid #89b4fa">
-        <div style="font-size:0.8em;color:#666;margin-bottom:6px"><strong>${a.who}</strong> · ${a.datetime?.substring(0,10) || ''} ${a.timetaken>0?`· ⏱ ${a.timetaken.toFixed(1)}h`:''}</div>
-        <div style="white-space:pre-wrap;font-size:0.9em">${a.note}</div>
+        <div style="font-size:0.8em;color:#666;margin-bottom:6px"><strong>${escapeHtml(a.who)}</strong> · ${a.datetime?.substring(0,10) || ''} ${a.timetaken>0?`· ⏱ ${a.timetaken.toFixed(1)}h`:''}</div>
+        <div style="white-space:pre-wrap;font-size:0.9em">${escapeHtml(a.note)}</div>
       </div>
     `).join('');
 
@@ -37,11 +38,11 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         from:    'Sondela Consulting <noreply@sondelaconsulting.com>',
         to:      [toEmail],
-        subject: `Session Summary: ${ticket.summary}`,
+        subject: `Session Summary: ${ticket.summary}`,  // a header, not HTML: escaping would show entities
         html: `
           <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
             <h2 style="color:#1e1e2e;border-bottom:2px solid #89b4fa;padding-bottom:8px">📋 Session Summary</h2>
-            <p style="color:#666">${ticket.summary}</p>
+            <p style="color:#666">${escapeHtml(ticket.summary)}</p>
             <h3 style="color:#1e1e2e">Notes &amp; Updates</h3>
             ${notesHtml || '<p style="color:#666">No notes recorded for this session.</p>'}
             <div style="margin-top:24px;padding:16px;background:#1e1e2e;border-radius:8px;text-align:center">

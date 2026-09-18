@@ -2,6 +2,24 @@ import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 
+// ?next= is attacker-supplied, so only a path on this site is followed: a value
+// like https://evil.example or //evil.example would otherwise send the user
+// there straight after they log in.
+function safeNext(next) {
+  if (typeof next !== 'string' || !next) return '/';
+  let decoded;
+  try {
+    decoded = decodeURIComponent(next);
+  } catch {
+    return '/';
+  }
+  // Must be a single-slash-rooted path; rejects //host, https://host and \\host.
+  if (!decoded.startsWith('/') || decoded.startsWith('//') || decoded.startsWith('/\\')) {
+    return '/';
+  }
+  return decoded;
+}
+
 export default function Login() {
   const router = useRouter();
   const [username, setUsername] = useState('');
@@ -37,7 +55,7 @@ export default function Login() {
     }
 
     if (res.ok && data.ok) {
-      router.replace(decodeURIComponent(router.query.next || '/'));
+      router.replace(safeNext(router.query.next));
     } else {
       setError(data.error || `Login failed (${res.status})`);
       setLoading(false);

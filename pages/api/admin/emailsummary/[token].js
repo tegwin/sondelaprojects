@@ -1,5 +1,6 @@
 import { verifyProject } from '../../../../lib/token';
 import { haloFetch } from '../../../../lib/halo';
+import { escapeHtml } from '../../../../lib/escapeHtml';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -27,8 +28,8 @@ export default async function handler(req, res) {
 
     const notesHtml = actions.map(a => `
       <div style="margin:12px 0;padding:12px;background:#f8f9fa;border-left:3px solid #89b4fa;border-radius:4px">
-        <div style="font-size:0.8em;color:#666;margin-bottom:6px">${a.who} · ${a.datetime?.substring(0,10)||''}</div>
-        <div style="font-size:0.9em;white-space:pre-wrap">${a.note}</div>
+        <div style="font-size:0.8em;color:#666;margin-bottom:6px">${escapeHtml(a.who)} · ${a.datetime?.substring(0,10)||''}</div>
+        <div style="font-size:0.9em;white-space:pre-wrap">${escapeHtml(a.note)}</div>
       </div>
     `).join('');
 
@@ -38,15 +39,15 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         from:    'Sondela Consulting <noreply@sondelaconsulting.com>',
         to:      toEmails,
-        subject: `Session Summary: ${ticket.summary}`,
+        subject: `Session Summary: ${ticket.summary}`,  // a header, not HTML: escaping would show entities
         html: `
           <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
             <div style="background:#1e1e2e;color:#cdd6f4;padding:24px;border-radius:12px 12px 0 0">
               <h2 style="margin:0;color:#89b4fa">Session Summary</h2>
-              <p style="color:#a6adc8;margin:8px 0 0">${ticket.summary}</p>
+              <p style="color:#a6adc8;margin:8px 0 0">${escapeHtml(ticket.summary)}</p>
             </div>
             <div style="padding:24px;border:1px solid #e0e0e0;border-top:none">
-              ${customNote ? `<p style="font-size:0.95em">${customNote}</p><hr/>` : ''}
+              ${customNote ? `<p style="font-size:0.95em">${escapeHtml(customNote)}</p><hr/>` : ''}
               <h3 style="color:#333">Session Notes</h3>
               ${notesHtml || '<p style="color:#666">No notes recorded for this session.</p>'}
               <div style="margin-top:24px;padding:16px;background:#f0f4ff;border-radius:8px">

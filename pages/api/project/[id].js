@@ -1,4 +1,5 @@
 import { haloFetch } from '../../../lib/halo';
+import { escapeHtml } from '../../../lib/escapeHtml';
 
 const CLOSED = [9, 16, 21];
 const ACTIVE  = [2, 22];
@@ -143,7 +144,7 @@ export default async function handler(req, res) {
       startdate: fmtDate(t.startdate),
       targetdate: fmtDate(t.targetdate),
       hoursLogged: t.projecttimeactual || 0,
-      details: t.details_html || (t.details ? `<p>${t.details}</p>` : ''),
+      details: t.details_html || (t.details ? `<p>${escapeHtml(t.details)}</p>` : ''),
       milestone: milestones.find(ms => ms.tickets_list.some(r => r.id === t.id))?.name || 'Other',
       actions: actionsMap[t.id] || [],
     }));
